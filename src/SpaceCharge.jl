@@ -8,7 +8,7 @@ include("deposition.jl")
 include("interpolation.jl")
 include("green_functions.jl")
 include("solvers/free_space.jl")
-include("solvers/rect_pipe.jl")
+include("solvers/rectangular_pipe.jl")
 include("utils.jl")
 
 export Mesh3D, deposit!, interpolate_field, generate_igf_kernel!, solve!, FreeSpace, RectangularPipe

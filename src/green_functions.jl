@@ -19,10 +19,43 @@ function lafun2(x, y, z)
 end
 
 """
-    xlafun2(x, y, z)
+    xlafun(x, y, z)
 
-Placeholder for the Fortran `xlafun2` function.
-This function is expected to compute another component of the Green's function.
+Translated from Fortran `xlafun` function.
+"""
+function xlafun(x, y, z)
+    r = sqrt(x^2 + y^2 + z^2)
+    res = z - x * atan(z / x) + x * atan(y * z / (x * r))
+    if y + r != 0
+        res = res - z * log(y + r)
+    end
+    if z + r != 0
+        res = res - y * log(z + r)
+    end
+    return res
+end
+
+"""
+    ylafun(x, y, z)
+
+Translated from Fortran `ylafun` function.
+"""
+function ylafun(x, y, z)
+    r = sqrt(x^2 + y^2 + z^2)
+    res = x - y * atan(x / y) + y * atan(x * z / (y * r))
+    if x + r != 0
+        res = res - z * log(x + r)
+    end
+    if z + r != 0
+        res = res - x * log(z + r)
+    end
+    return res
+end
+
+"""
+    zlafun(x, y, z)
+
+Translated from Fortran `zlafun` function.
 """
 function zlafun(x, y, z)
     r = sqrt(x^2 + y^2 + z^2)
@@ -172,4 +205,31 @@ the 8-point differencing to get the integrated value for each cell.
     else
         green_function_array[i, j, k] = 0.0 # Should not happen with correct component_idx
     end
+end
+
+"""
+    rfun(u, v, w, gam, a, b, hz, i_sign, j_sign)
+
+Translated from Fortran `rfun` function.
+"""
+function rfun(u, v, w, gam, a, b, hz, i_sign::Int, j_sign::Int)
+    res = 0.0
+    ainv = 1.0 / a
+    binv = 1.0 / b
+    piainv = pi * ainv
+    pibinv = pi * binv
+
+    for m = 1:5
+        for n = 1:5
+            kapmn = sqrt((m * piainv)^2 + (n * pibinv)^2)
+            zfun = (exp(-kapmn * abs(gam * w - hz)) - 2.0 * exp(-kapmn * abs(gam * w)) + exp(-kapmn * abs(gam * w + hz))) / (hz^2 * kapmn^2)
+            if w == 0.0
+                zfun += 2.0 / (hz * kapmn)
+            end
+            term = (i_sign^m) * (j_sign^n) * cos(m * u * piainv) * cos(n * v * pibinv) * zfun / kapmn
+            res += term
+        end
+    end
+    res = res * 2.0 * pi * ainv * binv
+    return res
 end
