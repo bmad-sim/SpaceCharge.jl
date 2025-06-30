@@ -2,6 +2,7 @@ using SpaceCharge
 using Test
 using CUDA
 using KernelAbstractions
+using FFTW # For plan_fft
 
 @testset "SpaceCharge.jl" begin
     # Test Mesh3D constructor
@@ -110,6 +111,128 @@ using KernelAbstractions
         @test Ey[1] ≈ 0.0 # Should be zero as we didn't set Ey values
         @test Ez[1] ≈ 0.0 # Should be zero as we didn't set Ez values
         @test Bx[1] ≈ 0.0 # Should be zero as we didn't set Bx values
+    end
+
+    # Test generate_igf_kernel!
+    @testset "generate_igf_kernel!" begin
+        grid_size = (4, 4, 4)
+        delta = (0.1, 0.1, 0.1)
+        green_function_array = zeros(Float64, grid_size)
+        backend = CPU()
+        kernel! = SpaceCharge.generate_igf_kernel!(backend)
+
+        # Test for Ex component (component_idx = 1)
+        kernel!(green_function_array, grid_size, delta, 1, ndrange=grid_size)
+        @test any(green_function_array .!= 0.0) # Ensure some values are calculated
+
+        # Test for Ey component (component_idx = 2)
+        fill!(green_function_array, 0.0) # Reset array
+        kernel!(green_function_array, grid_size, delta, 2, ndrange=grid_size)
+        @test any(green_function_array .!= 0.0)
+
+        # Test for Ez component (component_idx = 3)
+        fill!(green_function_array, 0.0) # Reset array
+        kernel!(green_function_array, grid_size, delta, 3, ndrange=grid_size)
+        @test any(green_function_array .!= 0.0)
+    end
+
+    # Test FreeSpace Solver
+    @testset "FreeSpace Solver" begin
+        grid_size = (16, 16, 16) # Larger grid for more realistic test
+        min_bounds = (-0.1, -0.1, -0.1)
+        max_bounds = (0.1, 0.1, 0.1)
+        mesh = SpaceCharge.Mesh3D(grid_size, min_bounds, max_bounds)
+
+        # Place a single charge at the center of the mesh
+        particles_x = [0.0]
+        particles_y = [0.0]
+        particles_z = [0.0]
+        particles_q = [1.0]
+
+        # Deposit charge
+        SpaceCharge.deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
+
+        # Solve for fields
+        SpaceCharge.solve!(mesh, SpaceCharge.FreeSpace())
+
+        # Verify that efield and bfield are populated (not all zeros)
+        @test any(mesh.efield .!= 0.0)
+        @test any(mesh.bfield .!= 0.0)
+
+        # For a single point charge at the center, E-field should be radial
+        # and B-field should be azimuthal (if gamma > 1). For gamma=1, B-field is 0.
+        # With placeholder lafun2/xlafun2, we can't check exact values, but can check general properties.
+        # For example, E-field should be strongest near the center.
+        # This is a very basic check due to placeholder Green's functions.
+
+        # Check that the sum of rho is conserved (deposit! should handle this)
+        @test sum(mesh.rho) ≈ sum(particles_q)
+    end
+
+    # Test Cathode Solver
+    @testset "Cathode Solver" begin
+        grid_size = (16, 16, 16)
+        min_bounds = (-0.1, -0.1, 0.0) # Cathode at z=0
+        max_bounds = (0.1, 0.1, 0.2)
+        mesh = SpaceCharge.Mesh3D(grid_size, min_bounds, max_bounds)
+
+        # Place a single charge near the cathode
+        particles_x = [0.0]
+        particles_y = [0.0]
+        particles_z = [0.01]
+        particles_q = [1.0]
+
+        # Deposit charge
+        SpaceCharge.deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
+
+        # Store initial rho for comparison
+        initial_rho = deepcopy(mesh.rho)
+
+        # Solve for fields with cathode boundary condition
+        SpaceCharge.solve!(mesh, SpaceCharge.FreeSpace(); at_cathode=true)
+
+        # Verify that efield and bfield are populated (not all zeros)
+        @test any(mesh.efield .!= 0.0)
+        @test any(mesh.bfield .!= 0.0)
+
+        # Basic check for image charge effect: E-field should be different from free-space
+        # This is a very high-level check due to placeholder Green's functions.
+        # A more rigorous test would compare against analytical solutions or Fortran output.
+        mesh_free_space = SpaceCharge.Mesh3D(grid_size, min_bounds, max_bounds)
+        SpaceCharge.deposit!(mesh_free_space, particles_x, particles_y, particles_z, particles_q)
+        SpaceCharge.solve!(mesh_free_space, SpaceCharge.FreeSpace())
+
+        @test !isapprox(mesh.efield, mesh_free_space.efield)
+        @test !isapprox(mesh.bfield, mesh_free_space.bfield)
+
+        # Verify image charge distribution (qualitative check)
+        # The image charge should be negative and flipped in z
+        # This is hard to test directly without exposing internal image_rho
+        # but we can infer from the field differences.
+    end
+
+    # Test RectangularPipe Solver
+    @testset "RectangularPipe Solver" begin
+        grid_size = (16, 16, 16)
+        min_bounds = (-0.1, -0.1, -0.1)
+        max_bounds = (0.1, 0.1, 0.1)
+        mesh = SpaceCharge.Mesh3D(grid_size, min_bounds, max_bounds)
+
+        # Place a single charge at the center of the mesh
+        particles_x = [0.0]
+        particles_y = [0.0]
+        particles_z = [0.0]
+        particles_q = [1.0]
+
+        # Deposit charge
+        SpaceCharge.deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
+
+        # Solve for fields
+        SpaceCharge.solve!(mesh, SpaceCharge.RectangularPipe())
+
+        # Verify that efield and bfield are populated (not all zeros)
+        @test any(mesh.efield .!= 0.0)
+        @test any(mesh.bfield .!= 0.0)
     end
 
     # Test GPU functionality if CUDA is available

@@ -12,9 +12,10 @@ Placeholder for the Fortran `lafun2` function.
 This function is expected to compute a component of the Green's function.
 """
 function lafun2(x, y, z)
-    # This is a placeholder. Actual implementation will come from Fortran translation.
-    # For now, return a simple value or throw an error if called.
-    return 1.0 # Dummy value
+    r = sqrt(x^2 + y^2 + z^2)
+    res = -0.5 * z^2 * atan(x * y / (z * r)) - 0.5 * y^2 * atan(x * z / (y * r)) - 0.5 * x^2 * atan(y * z / (x * r)) +
+          y * z * log(x + r) + x * z * log(y + r) + x * y * log(z + r)
+    return res
 end
 
 """
@@ -23,10 +24,104 @@ end
 Placeholder for the Fortran `xlafun2` function.
 This function is expected to compute another component of the Green's function.
 """
-function xlafun2(x, y, z)
-    # This is a placeholder. Actual implementation will come from Fortran translation.
-    # For now, return a simple value or throw an error if called.
-    return 1.0 # Dummy value
+function zlafun(x, y, z)
+    r = sqrt(x^2 + y^2 + z^2)
+    res = y - z * atan(y / z) + z * atan(x * y / (z * r))
+    if x + r != 0
+        res = res - y * log(x + r)
+    end
+    if y + r != 0
+        res = res - x * log(y + r)
+    end
+    return res
+end
+
+"""
+    igfcoulombfun(u, v, w, gam, dx, dy, dz)
+
+Translated from Fortran `igfcoulombfun` function.
+"""
+function igfcoulombfun(u, v, w, gam, dx, dy, dz)
+    x1 = u - 0.5 * dx
+    x2 = u + 0.5 * dx
+    y1 = v - 0.5 * dy
+    y2 = v + 0.5 * dy
+    z1 = (w - 0.5 * dz) * gam
+    z2 = (w + 0.5 * dz) * gam
+
+    res = lafun2(x2, y2, z2) - lafun2(x1, y2, z2) - lafun2(x2, y1, z2) - lafun2(x2, y2, z1) -
+          lafun2(x1, y1, z1) + lafun2(x1, y1, z2) + lafun2(x1, y2, z1) + lafun2(x2, y1, z1)
+    res = res / (dx * dy * dz * gam)
+    return res
+end
+
+"""
+    igfexfun(u, v, w, gam, dx, dy, dz)
+
+Translated from Fortran `igfexfun` function.
+"""
+function igfexfun(u, v, w, gam, dx, dy, dz)
+    x1 = u - 0.5 * dx
+    x2 = u + 0.5 * dx
+    y1 = v - 0.5 * dy
+    y2 = v + 0.5 * dy
+    z1 = (w - 0.5 * dz) * gam
+    z2 = (w + 0.5 * dz) * gam
+
+    if x1 < 0.0 && x2 > 0.0 && y1 < 0.0 && y2 > 0.0 && z1 < 0.0 && z2 > 0.0
+        res = 0.0
+    else
+        res = xlafun(x2, y2, z2) - xlafun(x1, y2, z2) - xlafun(x2, y1, z2) - xlafun(x2, y2, z1) -
+              xlafun(x1, y1, z1) + xlafun(x1, y1, z2) + xlafun(x1, y2, z1) + xlafun(x2, y1, z1)
+    end
+    res = res / (dx * dy * dz)
+    return res
+end
+
+"""
+    igfeyfun(u, v, w, gam, dx, dy, dz)
+
+Translated from Fortran `igfeyfun` function.
+"""
+function igfeyfun(u, v, w, gam, dx, dy, dz)
+    x1 = u - 0.5 * dx
+    x2 = u + 0.5 * dx
+    y1 = v - 0.5 * dy
+    y2 = v + 0.5 * dy
+    z1 = (w - 0.5 * dz) * gam
+    z2 = (w + 0.5 * dz) * gam
+
+    if x1 < 0.0 && x2 > 0.0 && y1 < 0.0 && y2 > 0.0 && z1 < 0.0 && z2 > 0.0
+        res = 0.0
+    else
+        res = ylafun(x2, y2, z2) - ylafun(x1, y2, z2) - ylafun(x2, y1, z2) - ylafun(x2, y2, z1) -
+              ylafun(x1, y1, z1) + ylafun(x1, y1, z2) + ylafun(x1, y2, z1) + ylafun(x2, y1, z1)
+    end
+    res = res / (dx * dy * dz)
+    return res
+end
+
+"""
+    igfezfun(u, v, w, gam, dx, dy, dz)
+
+Translated from Fortran `igfezfun` function.
+"""
+function igfezfun(u, v, w, gam, dx, dy, dz)
+    x1 = u - 0.5 * dx
+    x2 = u + 0.5 * dx
+    y1 = v - 0.5 * dy
+    y2 = v + 0.5 * dy
+    z1 = (w - 0.5 * dz) * gam
+    z2 = (w + 0.5 * dz) * gam
+
+    if x1 < 0.0 && x2 > 0.0 && y1 < 0.0 && y2 > 0.0 && z1 < 0.0 && z2 > 0.0
+        res = 0.0
+    else
+        res = zlafun(x2, y2, z2) - zlafun(x1, y2, z2) - zlafun(x2, y1, z2) - zlafun(x2, y2, z1) -
+              zlafun(x1, y1, z1) + zlafun(x1, y1, z2) + zlafun(x1, y2, z1) + zlafun(x2, y1, z1)
+    end
+    res = res / (dx * dy * dz * gam)
+    return res
 end
 
 """
@@ -48,6 +143,7 @@ the 8-point differencing to get the integrated value for each cell.
     grid_size,
     delta,
     component_idx,
+    gam,
 )
     idx = @index(Global, NTuple)
     i, j, k = idx[1], idx[2], idx[3]
@@ -65,12 +161,14 @@ the 8-point differencing to get the integrated value for each cell.
     # to construct the integrated Green's function.
 
     # For now, a dummy calculation based on the component_idx
-    if component_idx == 1 # Ex component
-        green_function_array[i, j, k] = lafun2(x_center + delta[1]/2, y_center, z_center) - lafun2(x_center - delta[1]/2, y_center, z_center)
+    if component_idx == 0 # Coulomb potential
+        green_function_array[i, j, k] = igfcoulombfun(x_center, y_center, z_center, gam, delta[1], delta[2], delta[3])
+    elseif component_idx == 1 # Ex component
+        green_function_array[i, j, k] = igfexfun(x_center, y_center, z_center, gam, delta[1], delta[2], delta[3])
     elseif component_idx == 2 # Ey component
-        green_function_array[i, j, k] = lafun2(x_center, y_center + delta[2]/2, z_center) - lafun2(x_center, y_center - delta[2]/2, z_center)
+        green_function_array[i, j, k] = igfeyfun(x_center, y_center, z_center, gam, delta[1], delta[2], delta[3])
     elseif component_idx == 3 # Ez component
-        green_function_array[i, j, k] = lafun2(x_center, y_center, z_center + delta[3]/2) - lafun2(x_center, y_center, z_center - delta[3]/2)
+        green_function_array[i, j, k] = igfezfun(x_center, y_center, z_center, gam, delta[1], delta[2], delta[3])
     else
         green_function_array[i, j, k] = 0.0 # Should not happen with correct component_idx
     end
