@@ -119,9 +119,9 @@ function main()
     gr()
     plot(z_coords, computed_Ez, label="Computed Ez", xlabel="Z-coordinate (m)", ylabel="Ez Field (V/m)",
          title="Ez Field Comparison along Centerline (x=0, y=0)", linewidth=2)
-    savefig("Ez_computed.png")
+    savefig("examples/Ez_computed.png")
     plot(z_coords, analytical_Ez, label="Analytical Ez", linestyle=:dash, linewidth=2)
-    savefig("Ez_analytical.png")
+    savefig("examples/Ez_analytical.png")
 
     println("Plot saved to Ez_computed.png and Ez_analytical.png")
 end
