@@ -1,58 +1,58 @@
-# OpenSpaceCharge.jl Implementation TODO
+# SpaceCharge.jl Implementation TODO
 
-This TODO list tracks the implementation progress for OpenSpaceCharge.jl based on the design document.
+This TODO list tracks the implementation progress for SpaceCharge.jl based on the design document.
 
 ## Phase 1: Project Setup and Core Data Structures
 
 ### 1.1 Initialize Julia Project
-- [ ] Create `OpenSpaceCharge.jl` package structure
-- [ ] Set up `Project.toml` with dependencies:
-  - [ ] `KernelAbstractions`
-  - [ ] `CUDA`
-  - [ ] `AbstractFFTs`
-  - [ ] `FFTW`
-  - [ ] `Test`
-- [ ] Create basic package directory structure:
-  - [ ] `src/OpenSpaceCharge.jl` (main module)
-  - [ ] `src/mesh.jl`
-  - [ ] `src/deposition.jl`
-  - [ ] `src/interpolation.jl`
-  - [ ] `src/green_functions.jl`
-  - [ ] `src/solvers/` directory
-  - [ ] `src/utils.jl`
-  - [ ] `test/runtests.jl`
+- [x] Create `SpaceCharge.jl` package structure
+- [x] Set up `Project.toml` with dependencies:
+  - [x] `KernelAbstractions`
+  - [x] `CUDA`
+  - [x] `AbstractFFTs`
+  - [x] `FFTW`
+  - [x] `Test`
+- [x] Create basic package directory structure:
+  - [x] `src/SpaceCharge.jl` (main module)
+  - [x] `src/mesh.jl`
+  - [x] `src/deposition.jl`
+  - [x] `src/interpolation.jl`
+  - [x] `src/green_functions.jl`
+  - [x] `src/solvers/` directory
+  - [x] `src/utils.jl`
+  - [x] `test/runtests.jl`
 
 ### 1.2 Implement Mesh3D Struct
-- [ ] Define `Mesh3D{T, A}` struct in `mesh.jl`
-- [ ] Implement constructor functions for `Mesh3D`
-- [ ] Add automatic `delta` calculation from grid dimensions and physical size
-- [ ] Add basic validation for mesh parameters
+- [x] Define `Mesh3D{T, A}` struct in `mesh.jl`
+- [x] Implement constructor functions for `Mesh3D`
+- [x] Add automatic `delta` calculation from grid dimensions and physical size
+- [x] Add basic validation for mesh parameters
 
 ## Phase 2: Particle and Grid Operations (CPU & GPU)
 
 ### 2.1 Implement Particle Deposition
-- [ ] Create `deposition.jl` file
-- [ ] Write `deposit_kernel!` using `KernelAbstractions.jl`
-- [ ] Implement trilinear (Cloud-in-Cell) deposition logic
-- [ ] Create main `deposit!` function that handles both CPU and GPU arrays
-- [ ] Test deposition with simple particle distributions
+- [x] Create `deposition.jl` file
+- [x] Write `deposit_kernel!` using `KernelAbstractions.jl`
+- [x] Implement trilinear (Cloud-in-Cell) deposition logic
+- [x] Create main `deposit!` function that handles both CPU and GPU arrays
+- [x] Test deposition with simple particle distributions
 
 ### 2.2 Implement Field Interpolation
-- [ ] Create `interpolation.jl` file
-- [ ] Write `interpolate_kernel!` using `KernelAbstractions.jl`
-- [ ] Implement trilinear interpolation for electric and magnetic fields
-- [ ] Create main `interpolate_field` function for both CPU and GPU
-- [ ] Test interpolation with known field distributions
+- [x] Create `interpolation.jl` file
+- [x] Write `interpolate_kernel!` using `KernelAbstractions.jl`
+- [x] Implement trilinear interpolation for electric and magnetic fields
+- [x] Create main `interpolate_field` function for both CPU and GPU
+- [x] Test interpolation with known field distributions
 
 ## Phase 3: The Free-Space Solver
 
 ### 3.1 Implement Integrated Green's Functions
-- [ ] Create `green_functions.jl` file
-- [ ] Translate `lafun2` elemental function from Fortran to Julia
-- [ ] Translate `xlafun2` elemental function from Fortran to Julia
+- [x] Create `green_functions.jl` file
+- [x] Translate `lafun2` elemental function from Fortran to Julia
+- [x] Translate `xlafun2` elemental function from Fortran to Julia
 - [ ] Ensure numerical stability (handle division by zero, log of non-positive numbers)
-- [ ] Write `generate_igf_kernel!` using `KernelAbstractions.jl`
-- [ ] Implement 8-point differencing for integrated values
+- [x] Write `generate_igf_kernel!` using `KernelAbstractions.jl`
+- [x] Implement 8-point differencing for integrated values
 - [ ] Test Green's function generation against analytical cases
 
 ### 3.2 Implement the Main Solver

@@ -1,15 +1,13 @@
 module SpaceCharge
 
-using FFTW
-using StaticArrays
-using Distributions
-using Plots
+using KernelAbstractions
+using Adapt
 
-include("utils.jl")
-include("charge_deposition.jl")
-include("field_solver.jl")
-include("visualization.jl")
+include("mesh.jl")
+include("deposition.jl")
+include("interpolation.jl")
+include("green_functions.jl")
 
-export deposit_charge_cic, calculate_field, green_function, generate_particles, plot_field
+export Mesh3D, deposit!, interpolate_field, generate_igf_kernel!
 
-end # module
+end # module OpenSpaceCharge
