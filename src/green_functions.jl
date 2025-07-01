@@ -27,18 +27,7 @@ function osc_get_cgrn_freespace!(
     icomp;
     offset = (0.0, 0.0, 0.0),
 )
-    dx, dy, dz = delta[1], delta[2], delta[3] * gamma
     isize, jsize, ksize = size(cgrn)
-
-    factor = if (icomp == 1) || (icomp == 2)
-        gamma / (dx * dy * dz)
-    else
-        1.0 / (dx * dy * dz)
-    end
-
-    umin = (0.5 - isize / 2) * dx + offset[1]
-    vmin = (0.5 - jsize / 2) * dy + offset[2]
-    wmin = (0.5 - ksize / 2) * dz + offset[3] * gamma
 
     # Temporary array to store point-wise Green's function values
     temp_g = similar(cgrn, Float64)
@@ -77,20 +66,14 @@ end
     gval = if icomp == 0
         lafun2(u, v, w)
     elseif icomp == 1
-        xlafun2(u, v, w)
+        gamma * xlafun2(u, v, w) # Apply gamma for transverse field transformation
     elseif icomp == 2
-        xlafun2(v, w, u)
+        gamma * xlafun2(v, w, u) # Apply gamma for transverse field transformation
     elseif icomp == 3
         xlafun2(w, u, v)
     else
         0.0
     end
 
-    factor = if (icomp == 1) || (icomp == 2)
-        gamma / (delta[1] * delta[2] * delta[3] * gamma)
-    else
-        1.0 / (delta[1] * delta[2] * delta[3] * gamma)
-    end
-
-    temp_g[i, j, k] = gval * factor
+    temp_g[i, j, k] = gval
 end

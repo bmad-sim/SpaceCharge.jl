@@ -82,7 +82,7 @@ function osc_freespace_solver2!(mesh; offset = (0.0, 0.0, 0.0))
             offset = offset,
         )
 
-        # FFT of Green's function
+        # FFT of Green's function (no fftshift)
         fft_grn = fft_plan * cgrn
 
         # Convolution
@@ -93,9 +93,10 @@ function osc_freespace_solver2!(mesh; offset = (0.0, 0.0, 0.0))
         result = ifft_plan * conv_fft
 
         # Normalization factor
-        factr = (299792458.0^2 * 1.00000000055e-7) / (nx2 * ny2 * nz2)
+        dV = mesh.delta[1] * mesh.delta[2] * mesh.delta[3]
+        factr = (299792458.0^2 * 1.00000000055e-7) / dV
 
-        # Extract field/potential
+        # Extract field/potential using manual slicing to match Fortran
         ishift, jshift, kshift = nx - 1, ny - 1, nz - 1
         if icomp == 0
             if isdefined(mesh, :phi)
@@ -115,6 +116,8 @@ function osc_freespace_solver2!(mesh; offset = (0.0, 0.0, 0.0))
         mesh.bfield[:, :, :, 3] .= 0.0
     end
 end
+
+
 
     
 

@@ -55,7 +55,7 @@ This TODO list tracks the implementation progress for SpaceCharge.jl based on th
 - [ ] Ensure numerical stability (handle division by zero, log of non-positive numbers)
 - [x] Write `generate_igf_kernel!` using `KernelAbstractions.jl`
 - [x] Implement 8-point differencing for integrated values
-- [ ] Test Green's function generation against analytical cases
+- [x] Test Green's function generation against analytical cases
 
 ### 3.2 Implement the Main Solver
 - [x] Create `solvers/free_space.jl` file

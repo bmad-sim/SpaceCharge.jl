@@ -1,9 +1,15 @@
 using SpaceCharge
 using Plots
 using Random
+using SpecialFunctions: erf
+using LinearAlgebra: norm
 
 # Constants
 const EPSILON_0 = 8.8541878128e-12 # Permittivity of free space
+
+function E(r;Q=1,σ=1)
+    return Q/(4π*8.8541878128e-12*norm(r)^3)*(erf(norm(r)/(sqrt(2)*σ)) - sqrt(2/π)*norm(r)/σ*exp(-(norm(r)/σ)^2/2)).*r
+end
 
 # Simpson's Rule Integrator (copied from runtests.jl)
 function simpsons_rule(f, a, b, n)
@@ -23,7 +29,7 @@ end
 
 # Analytical electric field components for a 3D Gaussian charge distribution in free space (copied from runtests.jl)
 function analytical_efield(x, y, z, Q, sigma_x, sigma_y, sigma_z)
-    n_simpson = 2000000 # Number of intervals for Simpson's rule. Adjust for desired precision.
+    n_simpson = 500000 # Number of intervals for Simpson's rule. Adjust for desired precision.
     upper_bound = 500.0 # Integration upper bound. Adjust if integrand doesn't decay sufficiently.
 
     # Ex component
@@ -82,18 +88,18 @@ end
 
 function main()
     # Setup mesh and particles
-    grid_size = (32, 32, 32)
-    min_bounds = (-0.05, -0.05, -0.05)
-    max_bounds = (0.05, 0.05, 0.05)
+    grid_size = (64, 64, 64)
+    min_bounds = (-0.006, -0.006, -0.006)
+    max_bounds = (0.006, 0.006, 0.006)
     mesh = SpaceCharge.Mesh3D(grid_size, min_bounds, max_bounds)
 
-    num_particles = 1000000
-    total_charge = 1.0
+    num_particles = 10000000
+    total_charge = 1.0e-9
     charge_per_particle = total_charge / num_particles
 
-    sigma_x = 0.01
-    sigma_y = 0.01
-    sigma_z = 0.01
+    sigma_x = 0.001
+    sigma_y = 0.001
+    sigma_z = 0.001
 
     Random.seed!(123)
     particles_x = randn(num_particles) .* sigma_x
@@ -113,17 +119,16 @@ function main()
     y_center_idx = argmin(abs.([mesh.min_bounds[2] + (j - 1) * mesh.delta[2] for j in 1:grid_size[2]]))
 
     computed_Ez = [mesh.efield[x_center_idx, y_center_idx, k, 3] for k in 1:grid_size[3]]
-    analytical_Ez = [analytical_efield(0.0, 0.0, z, total_charge, sigma_x, sigma_y, sigma_z)[3] for z in z_coords]
+    analytical_Ez = [E([0.0, 0.0, z],Q=1e-9,σ=1e-3)[3] for z in z_coords]
 
     # Plotting
     gr()
     plot(z_coords, computed_Ez, label="Computed Ez", xlabel="Z-coordinate (m)", ylabel="Ez Field (V/m)",
-         title="Ez Field Comparison along Centerline (x=0, y=0)", linewidth=2)
-    savefig("examples/Ez_computed.png")
-    plot(z_coords, analytical_Ez, label="Analytical Ez", linestyle=:dash, linewidth=2)
-    savefig("examples/Ez_analytical.png")
+         title="Ez Field along Centerline of isotropic 1nC bunch (x=0, y=0)", linewidth=2)
+    plot!(z_coords, analytical_Ez, label="Analytical Ez", linestyle=:dash, linewidth=2)
+    savefig("examples/Ez_comparison.png")
 
-    println("Plot saved to Ez_computed.png and Ez_analytical.png")
+    println("Plot saved to Ez_comparison.png")
 end
 
 main()
