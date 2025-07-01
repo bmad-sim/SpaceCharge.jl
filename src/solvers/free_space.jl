@@ -17,146 +17,105 @@ Represents free-space boundary conditions.
 struct FreeSpace <: BoundaryCondition end
 
 """
-    solve!(mesh::Mesh3D, ::FreeSpace)
+    solve!(mesh::Mesh3D, ::FreeSpace; at_cathode::Bool = false)
 
 Solves the space charge problem for free-space boundary conditions.
 
 # Arguments
 - `mesh`: A `Mesh3D` object containing the charge density and where the fields will be stored.
+- `at_cathode`: A boolean indicating whether to model a cathode at z=0.
 """
-function solve!(mesh::Mesh3D, ::FreeSpace; at_cathode::Bool=false)
-    # Calculate fields for the real charge distribution
-    _calculate_fields_from_rho!(
-        mesh.rho,
-        mesh.grid_size,
-        mesh.min_bounds,
-        mesh.max_bounds,
-        mesh.delta,
-        mesh.efield,
-        mesh.bfield,
-        mesh.gamma
-    )
+function solve!(mesh::Mesh3D, ::FreeSpace; at_cathode::Bool = false)
+    # Real charge field
+    osc_freespace_solver2!(mesh, offset = (0.0, 0.0, 0.0))
 
     if at_cathode
-        # Create a temporary array for the image charge distribution
-        image_rho = zeros(eltype(mesh.rho), mesh.grid_size)
+        # Image charge field
+        image_mesh = deepcopy(mesh)
+        image_mesh.rho .= -image_mesh.rho[:, :, end:-1:1]
 
-        # Populate image_rho by z-flipping and negating the real rho
-        # Assuming cathode is at z_min (mesh.min_bounds[3])
-        # The image charge at z' for a real charge at z is z' = 2*z_cathode - z
-        # For a grid, this means flipping the z-index.
-        for k in 1:mesh.grid_size[3]
-            # Calculate the corresponding image z-index
-            # If z_cathode is at the first plane (k=1), then image of k=1 is k=1, image of k=2 is k=0 (out of bounds)
-            # This needs to be carefully mapped. A simple flip is (grid_size[3] - k + 1)
-            image_k = mesh.grid_size[3] - k + 1
-            if 1 <= image_k <= mesh.grid_size[3]
-                image_rho[:, :, image_k] = -mesh.rho[:, :, k]
-            end
-        end
+        offset_z =
+            2 * mesh.min_bounds[3] + (mesh.max_bounds[3] - mesh.min_bounds[3])
+        offset = (0.0, 0.0, offset_z)
 
-        # Create temporary arrays for image fields
-        image_efield = zeros(eltype(mesh.efield), size(mesh.efield))
-        image_bfield = zeros(eltype(mesh.bfield), size(mesh.bfield))
+        osc_freespace_solver2!(image_mesh, offset = offset)
 
-        # Calculate fields for the image charge distribution
-        _calculate_fields_from_rho!(
-            image_rho,
-            mesh.grid_size,
-            mesh.min_bounds,
-            mesh.max_bounds,
+        # Superposition of fields
+        mesh.efield .+= image_mesh.efield
+
+        # B-field from image charges has opposite sign
+        beta = sqrt(1 - 1 / mesh.gamma^2)
+        clight = 299792458.0
+        mesh.bfield[:, :, :, 1] .-= (beta / clight) * image_mesh.efield[:, :, :, 2]
+        mesh.bfield[:, :, :, 2] .+= (beta / clight) * image_mesh.efield[:, :, :, 1]
+    end
+end
+
+"""
+    osc_freespace_solver2!(mesh; offset = (0.0, 0.0, 0.0))
+
+Julia implementation of the Fortran `osc_freespace_solver2` subroutine.
+"""
+function osc_freespace_solver2!(mesh; offset = (0.0, 0.0, 0.0))
+    nx, ny, nz = mesh.grid_size
+    nx2, ny2, nz2 = 2nx, 2ny, 2nz
+
+    # Allocate complex arrays
+    crho = zeros(ComplexF64, nx2, ny2, nz2)
+    cgrn = zeros(ComplexF64, nx2, ny2, nz2)
+
+    # Copy rho to padded array
+    crho[1:nx, 1:ny, 1:nz] .= mesh.rho
+
+    # FFT of charge density
+    fft_plan = plan_fft(crho)
+    fft_rho = fft_plan * crho
+
+    # Loop over phi, Ex, Ey, Ez
+    for icomp = 0:3
+        # Get Green's function
+        osc_get_cgrn_freespace!(
+            cgrn,
             mesh.delta,
-            image_efield,
-            image_bfield,
-            mesh.gamma
+            mesh.gamma,
+            icomp,
+            offset = offset,
         )
 
-        # Add the real and image fields together
-        # Be careful with signs for B-field (image charges move in opposite direction)
-        mesh.efield .+= image_efield
-        mesh.bfield .-= image_bfield # B-field from image charge is subtracted
+        # FFT of Green's function
+        fft_grn = fft_plan * cgrn
+
+        # Convolution
+        conv_fft = fft_rho .* fft_grn
+
+        # Inverse FFT
+        ifft_plan = plan_ifft(conv_fft)
+        result = ifft_plan * conv_fft
+
+        # Normalization factor
+        factr = (299792458.0^2 * 1.00000000055e-7) / (nx2 * ny2 * nz2)
+
+        # Extract field/potential
+        ishift, jshift, kshift = nx - 1, ny - 1, nz - 1
+        if icomp == 0
+            if isdefined(mesh, :phi)
+                mesh.phi .= factr * real.(result[1+ishift:nx+ishift, 1+jshift:ny+jshift, 1+kshift:nz+kshift])
+            end
+        else
+            mesh.efield[:, :, :, icomp] .= factr * real.(result[1+ishift:nx+ishift, 1+jshift:ny+jshift, 1+kshift:nz+kshift])
+        end
     end
 
-    return nothing
+    # Calculate B-field
+    if isdefined(mesh, :bfield)
+        beta = sqrt(1 - 1 / mesh.gamma^2)
+        clight = 299792458.0
+        mesh.bfield[:, :, :, 1] = -(beta / clight) * mesh.efield[:, :, :, 2]
+        mesh.bfield[:, :, :, 2] = (beta / clight) * mesh.efield[:, :, :, 1]
+        mesh.bfield[:, :, :, 3] .= 0.0
+    end
 end
 
-"""
-    _calculate_fields_from_rho!(rho_array, grid_size, min_bounds, max_bounds, delta, efield_out, bfield_out, gam)
-
-Helper function to calculate electric and magnetic fields from a given charge density array.
-This function performs the core FFT-based convolution for field calculation.
-
-# Arguments
-- `rho_array`: The charge density array.
-- `grid_size`: The size of the grid.
-- `min_bounds`: Minimum bounds of the physical domain.
-- `max_bounds`: Maximum bounds of the physical domain.
-- `delta`: Grid spacing.
-- `efield_out`: Output array for the electric field.
-- `bfield_out`: Output array for the magnetic field.
-- `gam`: Relativistic gamma factor.
-"""
-function _calculate_fields_from_rho!(
-    rho_array,
-    grid_size,
-    min_bounds,
-    max_bounds,
-    delta,
-    efield_out,
-    bfield_out,
-    gam,
-)
-    # --- 1. Pad the rho array ---
-    padded_rho_size = 2 .* grid_size
-    padded_rho = zeros(Complex{eltype(rho_array)}, padded_rho_size)
-    padded_rho[1:grid_size[1], 1:grid_size[2], 1:grid_size[3]] = rho_array
-
-    # --- 2. Create an FFT plan ---
-    backend = get_backend(rho_array)
-    if backend isa CPU
-        fft_plan = plan_fft(padded_rho)
-    elseif backend isa CUDABackend
-        fft_plan = plan_fft(padded_rho)
-    else
-        error("Unsupported backend for FFT: ", typeof(backend))
-    end
-
-    # --- 3. Perform forward FFT on padded_rho ---
-    fft_rho = fft_plan * padded_rho
-
-    # --- 4. Loop through components (Ex, Ey, Ez) and calculate Green's function ---
-    green_function_real = zeros(eltype(rho_array), padded_rho_size)
-    green_function_fft = similar(fft_rho)
-
-    for comp_idx in 1:3
-        kernel! = SpaceCharge.generate_igf_kernel!(backend)
-        kernel!(
-            green_function_real,
-            padded_rho_size,
-            delta,
-            comp_idx,
-            gam,
-            ndrange=padded_rho_size,
-        )
-
-        green_function_fft = fft_plan * green_function_real
-
-        fft_field_comp = fft_rho .* green_function_fft
-
-        field_comp_real = inv(fft_plan) * fft_field_comp
-
-        efield_out[1:grid_size[1], 1:grid_size[2], 1:grid_size[3], comp_idx] = real.(field_comp_real[1:grid_size[1], 1:grid_size[2], 1:grid_size[3]])
-    end
-
-    # --- 5. Calculate B-field from Ex and Ey ---
-    beta0 = sqrt(1 - 1 / gam^2)
-    clight = 299792458.0
-    bfield_out[1:grid_size[1], 1:grid_size[2], 1:grid_size[3], 1] = -efield_out[1:grid_size[1], 1:grid_size[2], 1:grid_size[3], 2] * beta0 / clight
-    bfield_out[1:grid_size[1], 1:grid_size[2], 1:grid_size[3], 2] = efield_out[1:grid_size[1], 1:grid_size[2], 1:grid_size[3], 1] * beta0 / clight
-    bfield_out[1:grid_size[1], 1:grid_size[2], 1:grid_size[3], 3] .= 0.0
-
-    return nothing
-end
     
 
 

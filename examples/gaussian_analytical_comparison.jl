@@ -23,7 +23,7 @@ end
 
 # Analytical electric field components for a 3D Gaussian charge distribution in free space (copied from runtests.jl)
 function analytical_efield(x, y, z, Q, sigma_x, sigma_y, sigma_z)
-    n_simpson = 200000 # Number of intervals for Simpson's rule. Adjust for desired precision.
+    n_simpson = 2000000 # Number of intervals for Simpson's rule. Adjust for desired precision.
     upper_bound = 500.0 # Integration upper bound. Adjust if integrand doesn't decay sufficiently.
 
     # Ex component
@@ -82,12 +82,12 @@ end
 
 function main()
     # Setup mesh and particles
-    grid_size = (16, 16, 16)
+    grid_size = (32, 32, 32)
     min_bounds = (-0.05, -0.05, -0.05)
     max_bounds = (0.05, 0.05, 0.05)
     mesh = SpaceCharge.Mesh3D(grid_size, min_bounds, max_bounds)
 
-    num_particles = 10000
+    num_particles = 1000000
     total_charge = 1.0
     charge_per_particle = total_charge / num_particles
 
