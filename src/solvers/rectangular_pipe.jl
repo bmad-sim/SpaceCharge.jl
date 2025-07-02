@@ -10,6 +10,39 @@ Represents rectangular pipe boundary conditions.
 """
 struct RectangularPipe <: BoundaryCondition end
 
+"""
+    rfun(x, y, z)
+
+Placeholder for the Fortran `rfun` function, which computes the Green's function
+for a rectangular pipe. This will involve a series summation.
+"""
+function rfun(u, v, w, gam, a, b, hz, i_val, j_val)
+    # Translated from Fortran `rfun` function.
+    # This function computes the Green's function for a rectangular pipe using a series summation.
+
+    ainv = 1.0 / a
+    binv = 1.0 / b
+    piainv = pi * ainv
+    pibinv = pi * binv
+
+    res = 0.0
+    for m in 1:5
+        for n in 1:5
+            kapmn = sqrt((m * piainv)^2 + (n * pibinv)^2)
+            
+            zfun = (exp(-kapmn * abs(gam * w - hz)) - 2.0 * exp(-kapmn * abs(gam * w)) + exp(-kapmn * abs(gam * w + hz))) / (hz^2 * kapmn^2)
+            if w == 0.0
+                zfun = zfun + 2.0 / (hz * kapmn)
+            end
+            term = (i_val^m) * (j_val^n) * cos(m * u * piainv) * cos(n * v * pibinv) * zfun / kapmn
+            res = res + term
+        end
+    end
+    res = res * 2.0 * pi * ainv * binv
+
+    return res
+end
+
 # Helper function to calculate dimensions for cgrn arrays
 function calculate_rectpipe_grn_dims(grid_size::NTuple{3, Int}, npad::NTuple{3, Int})
     nx, ny, nz = grid_size

@@ -7,88 +7,14 @@ using LinearAlgebra: norm
 # Constants
 const EPSILON_0 = 8.8541878128e-12 # Permittivity of free space
 
+# Exact solution for isotropic Gaussian bunch
 function E(r;Q=1,σ=1)
-    return Q/(4π*8.8541878128e-12*norm(r)^3)*(erf(norm(r)/(sqrt(2)*σ)) - sqrt(2/π)*norm(r)/σ*exp(-(norm(r)/σ)^2/2)).*r
-end
-
-# Simpson's Rule Integrator (copied from runtests.jl)
-function simpsons_rule(f, a, b, n)
-    if n % 2 != 0
-        n += 1 # Ensure n is even
-    end
-    h = (b - a) / n
-    s = f(a) + f(b)
-    for i = 1:2:n-1
-        s += 4 * f(a + i * h)
-    end
-    for i = 2:2:n-2
-        s += 2 * f(a + i * h)
-    end
-    return s * h / 3
-end
-
-# Analytical electric field components for a 3D Gaussian charge distribution in free space (copied from runtests.jl)
-function analytical_efield(x, y, z, Q, sigma_x, sigma_y, sigma_z)
-    n_simpson = 500000 # Number of intervals for Simpson's rule. Adjust for desired precision.
-    upper_bound = 500.0 # Integration upper bound. Adjust if integrand doesn't decay sufficiently.
-
-    # Ex component
-    integrand_Ex(lambda) = begin
-        denom_x = lambda^2 * sigma_x^2 + 1
-        denom_y = lambda^2 * sigma_y^2 + 1
-        denom_z = lambda^2 * sigma_z^2 + 1
-
-        exp_term_x = exp(-lambda^2 * x^2 / (2 * denom_x))
-        exp_term_y = exp(-lambda^2 * y^2 / (2 * denom_y))
-        exp_term_z = exp(-lambda^2 * z^2 / (2 * denom_z))
-
-        sqrt_denom = sqrt(denom_x * denom_y * denom_z)
-
-        return lambda^2 * exp_term_x * exp_term_y * exp_term_z / sqrt_denom * (x / denom_x)
-    end
-    Ex_integral = simpsons_rule(integrand_Ex, 0.0, upper_bound, n_simpson)
-    Ex = Q / (4 * pi * EPSILON_0) * sqrt(2 / pi) * Ex_integral
-
-    # Ey component
-    integrand_Ey(lambda) = begin
-        denom_x = lambda^2 * sigma_x^2 + 1
-        denom_y = lambda^2 * sigma_y^2 + 1
-        denom_z = lambda^2 * sigma_z^2 + 1
-
-        exp_term_x = exp(-lambda^2 * x^2 / (2 * denom_x))
-        exp_term_y = exp(-lambda^2 * y^2 / (2 * denom_y))
-        exp_term_z = exp(-lambda^2 * z^2 / (2 * denom_z))
-
-        sqrt_denom = sqrt(denom_x * denom_y * denom_z)
-
-        return lambda^2 * exp_term_x * exp_term_y * exp_term_z / sqrt_denom * (y / denom_y)
-    end
-    Ey_integral = simpsons_rule(integrand_Ey, 0.0, upper_bound, n_simpson)
-    Ey = Q / (4 * pi * EPSILON_0) * sqrt(2 / pi) * Ey_integral
-
-    # Ez component
-    integrand_Ez(lambda) = begin
-        denom_x = lambda^2 * sigma_x^2 + 1
-        denom_y = lambda^2 * sigma_y^2 + 1
-        denom_z = lambda^2 * sigma_z^2 + 1
-
-        exp_term_x = exp(-lambda^2 * x^2 / (2 * denom_x))
-        exp_term_y = exp(-lambda^2 * y^2 / (2 * denom_y))
-        exp_term_z = exp(-lambda^2 * z^2 / (2 * denom_z))
-
-        sqrt_denom = sqrt(denom_x * denom_y * denom_z)
-
-        return lambda^2 * exp_term_x * exp_term_y * exp_term_z / sqrt_denom * (z / denom_z)
-    end
-    Ez_integral = simpsons_rule(integrand_Ez, 0.0, upper_bound, n_simpson)
-    Ez = Q / (4 * pi * EPSILON_0) * sqrt(2 / pi) * Ez_integral
-
-    return Ex, Ey, Ez
+    return Q/(4π*EPSILON_0*norm(r)^3)*(erf(norm(r)/(sqrt(2)*σ)) - sqrt(2/π)*norm(r)/σ*exp(-(norm(r)/σ)^2/2)).*r
 end
 
 function main()
     # Setup mesh and particles
-    grid_size = (64, 64, 64)
+    grid_size = (32, 32, 32)
     min_bounds = (-0.006, -0.006, -0.006)
     max_bounds = (0.006, 0.006, 0.006)
     mesh = SpaceCharge.Mesh3D(grid_size, min_bounds, max_bounds)
@@ -120,6 +46,12 @@ function main()
 
     computed_Ez = [mesh.efield[x_center_idx, y_center_idx, k, 3] for k in 1:grid_size[3]]
     analytical_Ez = [E([0.0, 0.0, z],Q=1e-9,σ=1e-3)[3] for z in z_coords]
+
+
+    println("Maximum relative error: ", maximum(abs.(computed_Ez .- analytical_Ez) ./ abs.(analytical_Ez)))
+    println("Maximum absolute error: ", maximum(abs.(computed_Ez .- analytical_Ez)) / maximum(abs.(analytical_Ez)))
+    println("Index of maximum relative error: ", argmax(abs.(computed_Ez .- analytical_Ez) ./ abs.(analytical_Ez)))
+    println("Index of maximum absolute error: ", argmax(abs.(computed_Ez .- analytical_Ez)))
 
     # Plotting
     gr()

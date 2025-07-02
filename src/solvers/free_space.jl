@@ -1,6 +1,5 @@
 using KernelAbstractions
 using AbstractFFTs
-using FFTW
 
 """
     abstract type BoundaryCondition end
@@ -61,8 +60,9 @@ function osc_freespace_solver2!(mesh; offset = (0.0, 0.0, 0.0))
     nx2, ny2, nz2 = 2nx, 2ny, 2nz
 
     # Allocate complex arrays
-    crho = zeros(ComplexF64, nx2, ny2, nz2)
-    cgrn = zeros(ComplexF64, nx2, ny2, nz2)
+    crho = similar(mesh.rho, ComplexF64, nx2, ny2, nz2)
+    fill!(crho, 0.0)
+    cgrn = similar(crho)
 
     # Copy rho to padded array
     crho[1:nx, 1:ny, 1:nz] .= mesh.rho
