@@ -92,9 +92,8 @@ function osc_freespace_solver2!(mesh; offset = (0.0, 0.0, 0.0))
         ifft_plan = plan_ifft(conv_fft)
         result = ifft_plan * conv_fft
 
-        # Normalization factor
-        dV = mesh.delta[1] * mesh.delta[2] * mesh.delta[3]
-        factr = (299792458.0^2 * 1.00000000055e-7) / dV
+        # Normalization factor: 1/(4 pi eps0)
+        factr = (299792458.0^2 * 1.00000000055e-7)
 
         # Extract field/potential using manual slicing to match Fortran
         ishift, jshift, kshift = nx - 1, ny - 1, nz - 1
@@ -116,9 +115,3 @@ function osc_freespace_solver2!(mesh; offset = (0.0, 0.0, 0.0))
         mesh.bfield[:, :, :, 3] .= 0.0
     end
 end
-
-
-
-    
-
-

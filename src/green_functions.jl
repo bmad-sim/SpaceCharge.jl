@@ -29,31 +29,35 @@ function osc_get_cgrn_freespace!(
 )
     isize, jsize, ksize = size(cgrn)
 
-    # Temporary array to store point-wise Green's function values
-    temp_g = similar(cgrn, Float64)
-
-    # Use KernelAbstractions for parallel computation
+    # Populate cgrn with pointwise Green's function
     backend = get_backend(cgrn)
     kernel! = get_green_kernel!(backend)
-    kernel!(temp_g, delta, gamma, icomp, offset, ndrange = size(cgrn))
+    kernel!(cgrn, delta, gamma, icomp, offset, ndrange = size(cgrn))
 
-    # 8-point differencing for integrated Green's function
+    # Apply 8-point differencing to compute integrated Green's function
     @views cgrn[1:isize-1, 1:jsize-1, 1:ksize-1] .=
-        temp_g[2:isize, 2:jsize, 2:ksize] .-
-        temp_g[1:isize-1, 2:jsize, 2:ksize] .-
-        temp_g[2:isize, 1:jsize-1, 2:ksize] .-
-        temp_g[2:isize, 2:jsize, 1:ksize-1] .-
-        temp_g[1:isize-1, 1:jsize-1, 1:ksize-1] .+
-        temp_g[1:isize-1, 1:jsize-1, 2:ksize] .+
-        temp_g[1:isize-1, 2:jsize, 1:ksize-1] .+
-        temp_g[2:isize, 1:jsize-1, 1:ksize-1]
+        cgrn[2:isize, 2:jsize, 2:ksize] .-
+        cgrn[1:isize-1, 2:jsize, 2:ksize] .-
+        cgrn[2:isize, 1:jsize-1, 2:ksize] .-
+        cgrn[2:isize, 2:jsize, 1:ksize-1] .-
+        cgrn[1:isize-1, 1:jsize-1, 1:ksize-1] .+
+        cgrn[1:isize-1, 1:jsize-1, 2:ksize] .+
+        cgrn[1:isize-1, 2:jsize, 1:ksize-1] .+
+        cgrn[2:isize, 1:jsize-1, 1:ksize-1]
 end
 
-@kernel function get_green_kernel!(temp_g, delta, gamma, icomp, offset)
+@kernel function get_green_kernel!(cgrn, delta, gamma, icomp, offset)
     i, j, k = @index(Global, NTuple)
     isize, jsize, ksize = @ndrange
 
     dx, dy, dz = delta[1], delta[2], delta[3] * gamma
+
+    # Apply normalization factor
+    factor = if (icomp == 1) || (icomp == 2)
+        gamma / (dx * dy * dz)  # transverse fields are enhanced by gamma
+    else
+        1.0 / (dx * dy * dz)
+    end
 
     umin = (0.5 - isize / 2) * dx + offset[1]
     vmin = (0.5 - jsize / 2) * dy + offset[2]
@@ -64,16 +68,16 @@ end
     w = (k - 1) * dz + wmin
 
     gval = if icomp == 0
-        lafun2(u, v, w)
+        lafun2(u, v, w) * factor
     elseif icomp == 1
-        gamma * xlafun2(u, v, w) # Apply gamma for transverse field transformation
+        xlafun2(u, v, w) * factor
     elseif icomp == 2
-        gamma * xlafun2(v, w, u) # Apply gamma for transverse field transformation
+        xlafun2(v, w, u) * factor
     elseif icomp == 3
-        xlafun2(w, u, v)
+        xlafun2(w, u, v) * factor
     else
         0.0
     end
 
-    temp_g[i, j, k] = gval
+    cgrn[i, j, k] = complex(gval, 0.0)
 end
