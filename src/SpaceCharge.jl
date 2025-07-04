@@ -14,4 +14,4 @@ include("utils.jl")
 
 export Mesh3D, deposit!, interpolate_field, solve!, FreeSpace, RectangularPipe, analytical_efield, BoundaryCondition
 
-end # module OpenSpaceCharge
+end # module SpaceCharge
