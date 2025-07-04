@@ -6,7 +6,7 @@ using Random
 """
 Compare CPU vs GPU performance for deposit! function
 """
-function compare_cpu_gpu(grid_size, n_particles)
+function compare_cpu_gpu_deposit(grid_size, n_particles)
     println("\n" * "="^60)
     println("CPU vs GPU Performance Comparison")
     println("Grid: $(grid_size[1])³, Particles: $n_particles")
@@ -69,7 +69,7 @@ end
 """
 Comprehensive CPU vs GPU benchmark across different problem sizes
 """
-function comprehensive_benchmark()
+function comprehensive_benchmark_deposit()
     println("\n🚀 Comprehensive CPU vs GPU Benchmark")
     println("Testing performance across different problem sizes...")
     
@@ -87,7 +87,7 @@ function comprehensive_benchmark()
     
     for (grid_size, n_particles) in test_configs
         try
-            results = compare_cpu_gpu(grid_size, n_particles)
+            results = compare_cpu_gpu_deposit(grid_size, n_particles)
             push!(all_results, (grid_size, n_particles, results))
         catch e
             println("❌ Failed for grid $(grid_size[1])³, particles $n_particles: $e")
@@ -140,4 +140,4 @@ function comprehensive_benchmark()
     end
 end
 
-comprehensive_benchmark()
+comprehensive_benchmark_deposit()
