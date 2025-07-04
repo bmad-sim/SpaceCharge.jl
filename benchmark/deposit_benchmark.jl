@@ -130,20 +130,7 @@ function comprehensive_benchmark()
         
         if valid_gpu_tests > 0
             avg_speedup = total_speedup / valid_gpu_tests
-            println("\n📊 Average GPU speedup: $(round(avg_speedup, digits=1))x")
-            
-            # Performance insights
-            println("\n🎯 Performance Insights:")
-            println("• GPU acceleration is most effective for larger particle counts")
-            println("• Both CPU and GPU methods maintain excellent charge conservation")
-            
-            if avg_speedup > 10
-                println("• Excellent GPU acceleration achieved!")
-            elseif avg_speedup > 5
-                println("• Good GPU acceleration achieved")
-            else
-                println("• Moderate GPU acceleration - may benefit from larger problem sizes")
-            end
+            println("\nAverage GPU speedup: $(round(avg_speedup, digits=1))x")
         else
             println("\nGPU benchmarks not available")
         end
