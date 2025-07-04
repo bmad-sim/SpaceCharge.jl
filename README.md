@@ -1,6 +1,21 @@
 # SpaceCharge.jl
 
-SpaceCharge.jl is a Julia package for 3D space-charge calculations, designed for high-performance on both CPUs and GPUs. It aims to provide functionality equivalent to existing Fortran codes, leveraging Julia's capabilities for parallel computing.
+SpaceCharge.jl is a high-performance Julia package for 3D space-charge calculations, supporting both CPU and GPU acceleration. It is designed for scientific computing applications such as beam physics and accelerator modeling.
+
+## Algorithm and Citation
+
+This package implements a parallel fast Fourier transform (FFT) based 3D space charge algorithm using integrated Green functions, as described in:
+
+> Mayes, Christopher and Ryne, Robert and Sagan, David. "3D Space Charge in Bmad." 9th International Particle Accelerator Conference, 2018. [doi:10.18429/JACoW-IPAC2018-THPAK085](https://doi.org/10.18429/JACoW-IPAC2018-THPAK085)
+
+The original Fortran implementation is available at: [https://github.com/RobertRyne/OpenSpaceCharge](https://github.com/RobertRyne/OpenSpaceCharge)
+
+The package provides high-level routines to:
+- Deposit weighted charged particles on a 3D rectangular grid.
+- Calculate the space charge fields on this grid.
+- Interpolate the field to an arbitrary point within its domain.
+
+Convolutions of the Green functions and the charge density are performed efficiently with FFTs.
 
 ## Installation
 
@@ -8,80 +23,21 @@ To install SpaceCharge.jl, open the Julia REPL and run:
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/your-username/SpaceCharge.jl.git") # Replace with actual repository URL
+Pkg.add(url="https://github.com/ndwang/SpaceCharge.jl.git")
 ```
 
-## Usage
+## Getting Started
 
-### Basic CPU Usage Example
+- **Examples:** See the `examples/` directory for scripts demonstrating basic usage, GPU acceleration, boundary conditions, and analytical comparisons.
+- **Benchmarks:** The `benchmark/` directory contains scripts to evaluate performance on different hardware and problem sizes.
+- **Tests:** The `test/` directory provides a comprehensive suite of tests to ensure correctness and stability.
+- **Design:** For architectural details, refer to `DesignDocument.md`.
+- **Development Tasks:** See `TODO.md` for current and planned development work.
 
-```julia
-using SpaceCharge
+## Contributing
 
-# Define grid parameters
-grid_size = (32, 32, 32)
-min_bounds = (-0.05, -0.05, -0.05) # meters
-max_bounds = (0.05, 0.05, 0.05)   # meters
+Contributions are welcome! Please open issues or pull requests for bug reports, feature requests, or improvements.
 
-# Create a Mesh3D object
-mesh = SpaceCharge.Mesh3D(grid_size, min_bounds, max_bounds)
+## License
 
-# Define some particles (e.g., a single point charge at the center)
-particles_x = [0.0]
-particles_y = [0.0]
-particles_z = [0.0]
-particles_q = [1.0e-9] # 1 nC charge
-
-# Deposit particle charges onto the grid
-SpaceCharge.deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
-
-# Solve for the electric and magnetic fields using FreeSpace boundary conditions
-SpaceCharge.solve!(mesh, SpaceCharge.FreeSpace())
-
-# Interpolate fields back to particle positions (example for the first particle)
-Ex, Ey, Ez, Bx, By, Bz = SpaceCharge.interpolate_field(mesh, particles_x, particles_y, particles_z)
-
-println("Electric Field at particle position: Ex=\$(Ex[1]), Ey=\$(Ey[1]), Ez=\$(Ez[1])")
-println("Magnetic Field at particle position: Bx=\$(Bx[1]), By=\$(By[1]), Bz=\$(Bz[1])")
-
-# You can now access the calculated fields on the mesh:
-# mesh.rho   # Charge density
-# mesh.efield # Electric field (Ex, Ey, Ez components)
-# mesh.bfield # Magnetic field (Bx, By, Bz components)
-```
-
-### GPU Acceleration
-
-To use GPU acceleration, simply create your `Mesh3D` object with `array_type=CuArray` (requires `CUDA.jl` to be installed and a compatible GPU):
-
-```julia
-using SpaceCharge
-using CUDA # Make sure CUDA.jl is installed and functional
-
-# Define grid parameters
-grid_size = (64, 64, 64)
-min_bounds = (-0.05, -0.05, -0.05)
-max_bounds = (0.05, 0.05, 0.05)
-
-# Create a Mesh3D object on the GPU
-mesh_gpu = SpaceCharge.Mesh3D(grid_size, min_bounds, max_bounds; array_type=CuArray)
-
-# Define particles on the GPU
-particles_x_gpu = CuArray([0.0])
-particles_y_gpu = CuArray([0.0])
-particles_z_gpu = CuArray([0.0])
-particles_q_gpu = CuArray([1.0e-9])
-
-# Deposit and solve on the GPU (functions automatically dispatch to GPU kernels)
-SpaceCharge.deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
-SpaceCharge.solve!(mesh_gpu, SpaceCharge.FreeSpace())
-
-# Interpolate fields back to particle positions on the GPU
-Ex_gpu, Ey_gpu, Ez_gpu, Bx_gpu, By_gpu, Bz_gpu = SpaceCharge.interpolate_field(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu)
-
-println("GPU Electric Field at particle position: Ex=\$(Ex_gpu[1]), Ey=\$(Ey_gpu[1]), Ez=\$(Ez_gpu[1])")
-```
-
-## Development
-
-For developers, refer to the `DesignDocument.md` for architectural details and `TODO.md` for current development tasks.
+This project is licensed under the MIT License. See the `LICENSE` file for details.

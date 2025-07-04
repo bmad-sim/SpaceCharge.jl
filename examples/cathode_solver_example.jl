@@ -1,26 +1,27 @@
 using SpaceCharge
 
-# Define grid parameters
+# FreeSpace solver with cathode example: single point charge above z=0, using at_cathode=true
+
+# Define grid size
 grid_size = (32, 32, 32)
-min_bounds = (-0.05, -0.05, 0.0) # Cathode at z=0
-max_bounds = (0.05, 0.05, 0.1)   # meters
 
-# Create a Mesh3D object
-mesh = SpaceCharge.Mesh3D(grid_size, min_bounds, max_bounds)
-
-# Define some particles (e.g., a single point charge near the cathode)
+# Define particle positions and charges (single point charge above cathode at z=0)
 particles_x = [0.0]
 particles_y = [0.0]
 particles_z = [0.01]
-particles_q = [1.0e-9] # 1 nC charge
+particles_q = [1.0e-9]
+
+# Create a Mesh3D object with automatic bounds (default: CPU)
+mesh = Mesh3D(grid_size, particles_x, particles_y, particles_z)
 
 # Deposit particle charges onto the grid
-SpaceCharge.deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
+deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
 
-# Solve for the electric and magnetic fields using FreeSpace boundary conditions with cathode
-SpaceCharge.solve!(mesh, SpaceCharge.FreeSpace(); at_cathode=true)
+# Solve for electric and magnetic fields (FreeSpace boundary, at_cathode=true)
+solve!(mesh, FreeSpace(); at_cathode=true)
 
-println("Cathode Solver Example:")
-println("  Total charge deposited: $(sum(mesh.rho))")
-println("  Electric field (first element): $(mesh.efield[1,1,1,:])")
-println("  Magnetic field (first element): $(mesh.bfield[1,1,1,:])")
+# Interpolate fields back to particle position
+Ex, Ey, Ez, Bx, By, Bz = interpolate_field(mesh, particles_x, particles_y, particles_z)
+
+println("E-field at particle: Ex=$(Ex[1]), Ey=$(Ey[1]), Ez=$(Ez[1])")
+println("B-field at particle: Bx=$(Bx[1]), By=$(By[1]), Bz=$(Bz[1])") 

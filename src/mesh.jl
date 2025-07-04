@@ -51,7 +51,6 @@ This is the recommended constructor as it eliminates the need for bounds checkin
 - `array_type::Type{<:AbstractArray} = Array`: The array type to use for data storage (e.g., `Array` for CPU, `CuArray` for GPU).
 - `gamma::Real = 1.0`: Relativistic gamma factor of the beam.
 - `total_charge::Real = 0.0`: Total charge of the particle bunch.
-- `padding_factor::Real = 0.1`: Fraction of domain size to add as padding around particles.
 
 # Returns
 - A `Mesh3D` object with bounds automatically set to contain all particles with padding.
@@ -64,8 +63,7 @@ function Mesh3D(
     T::Type{<:AbstractFloat}=Float64,
     array_type::Type{<:AbstractArray}=Array,
     gamma::Real=1.0,
-    total_charge::Real=0.0,
-    padding_factor::Real=0.1
+    total_charge::Real=0.0
 )
     # --- Validation ---
     if any(grid_size .<= 0)
@@ -82,27 +80,39 @@ function Mesh3D(
     y_min, y_max = extrema(particles_y)
     z_min, z_max = extrema(particles_z)
     
-    # Add padding to ensure particles don't land exactly on boundaries
-    x_range = x_max - x_min
-    y_range = y_max - y_min
-    z_range = z_max - z_min
+    # Compute initial bounds and grid spacing
+    min_bounds = (x_min, y_min, z_min)
+    max_bounds = (x_max, y_max, z_max)
+    delta = ((max_bounds[1] - min_bounds[1]) / (grid_size[1] - 1),
+             (max_bounds[2] - min_bounds[2]) / (grid_size[2] - 1),
+             (max_bounds[3] - min_bounds[3]) / (grid_size[3] - 1))
     
-    # Handle case where all particles are at the same position
-    x_padding = max(x_range * padding_factor, 1e-6)
-    y_padding = max(y_range * padding_factor, 1e-6)
-    z_padding = max(z_range * padding_factor, 1e-6)
+    # Small padding to protect against indexing errors (Fortran logic)
+    min_bounds = (min_bounds[1] - 1e-6 * delta[1],
+                  min_bounds[2] - 1e-6 * delta[2],
+                  min_bounds[3] - 1e-6 * delta[3])
+    max_bounds = (max_bounds[1] + 1e-6 * delta[1],
+                  max_bounds[2] + 1e-6 * delta[2],
+                  max_bounds[3] + 1e-6 * delta[3])
     
-    min_bounds = (x_min - x_padding, y_min - y_padding, z_min - z_padding)
-    max_bounds = (x_max + x_padding, y_max + y_padding, z_max + z_padding)
+    # Recompute delta after padding
+    delta = ((max_bounds[1] - min_bounds[1]) / (grid_size[1] - 1),
+             (max_bounds[2] - min_bounds[2]) / (grid_size[2] - 1),
+             (max_bounds[3] - min_bounds[3]) / (grid_size[3] - 1))
+
+    # Patch: If any delta is zero, set it to a small value (1e-10)
+    delta = (
+        delta[1] == 0 ? 1e-10 : delta[1],
+        delta[2] == 0 ? 1e-10 : delta[2],
+        delta[3] == 0 ? 1e-10 : delta[3]
+    )
+    delta = T.(delta)
 
     # --- Type Conversion ---
     cv_min_bounds = T.(min_bounds)
     cv_max_bounds = T.(max_bounds)
     cv_gamma = T(gamma)
     cv_total_charge = T(total_charge)
-
-    # --- Derived Properties ---
-    delta = (cv_max_bounds .- cv_min_bounds) ./ (grid_size .- 1)
 
     # --- Array Allocation ---
     # Create arrays on the CPU first

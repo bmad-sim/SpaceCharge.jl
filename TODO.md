@@ -81,14 +81,14 @@ This TODO list tracks the implementation progress for SpaceCharge.jl based on th
 
 ### 4.1 Enable GPU Execution
 - [x] Write GPU test cases using `CuArray`s
-- [ ] Verify `deposit!` works on GPU without changes
-- [ ] Verify `solve!` works on GPU without changes
+- [x] Verify `deposit!` works on GPU without changes
+- [x] Verify `solve!` works on GPU without changes
 - [ ] Verify `interpolate_field` works on GPU without changes
 - [ ] Profile GPU performance
 - [ ] Debug and fix any GPU-specific bottlenecks:
   - [ ] Eliminate scalar indexing
   - [ ] Optimize memory transfers
-- [ ] Benchmark CPU vs GPU performance
+- [x] Benchmark CPU vs GPU performance
 
 ### 4.2 Implement Cathode Image Solver
 - [x] Extend `solve!` in `free_space.jl` for `at_cathode=true` case
@@ -120,7 +120,7 @@ This TODO list tracks the implementation progress for SpaceCharge.jl based on th
 
 ### 6.1 Comprehensive Testing
 - [ ] Add tests for all boundary conditions:
-  - [ ] Free space solver tests
+  - [x] Free space solver tests
   - [ ] Cathode image solver tests
   - [ ] Rectangular pipe solver tests
 - [ ] Compare numerical outputs against Fortran code

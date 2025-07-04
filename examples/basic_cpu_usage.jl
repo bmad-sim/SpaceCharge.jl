@@ -1,32 +1,27 @@
 using SpaceCharge
 
-# Define grid parameters
+# Basic CPU usage example: single point charge, default settings
+
+# Define grid size
 grid_size = (32, 32, 32)
-min_bounds = (-0.05, -0.05, -0.05) # meters
-max_bounds = (0.05, 0.05, 0.05)   # meters
 
-# Create a Mesh3D object
-mesh = SpaceCharge.Mesh3D(grid_size, min_bounds, max_bounds)
-
-# Define some particles (e.g., a single point charge at the center)
+# Define particle positions and charges (single point charge at origin)
 particles_x = [0.0]
 particles_y = [0.0]
 particles_z = [0.0]
 particles_q = [1.0e-9] # 1 nC charge
 
+# Create a Mesh3D object with automatic bounds (default: CPU)
+mesh = Mesh3D(grid_size, particles_x, particles_y, particles_z)
+
 # Deposit particle charges onto the grid
-SpaceCharge.deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
+deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
 
-# Solve for the electric and magnetic fields using FreeSpace boundary conditions
-SpaceCharge.solve!(mesh, SpaceCharge.FreeSpace())
+# Solve for electric and magnetic fields (FreeSpace boundary)
+solve!(mesh, FreeSpace())
 
-# Interpolate fields back to particle positions (example for the first particle)
-Ex, Ey, Ez, Bx, By, Bz = SpaceCharge.interpolate_field(mesh, particles_x, particles_y, particles_z)
+# Interpolate fields back to particle positions
+Ex, Ey, Ez, Bx, By, Bz = interpolate_field(mesh, particles_x, particles_y, particles_z)
 
 println("Electric Field at particle position: Ex=$(Ex[1]), Ey=$(Ey[1]), Ez=$(Ez[1])")
-println("Magnetic Field at particle position: Bx=$(Bx[1]), By=$(By[1]), Bz=$(Bz[1])")
-
-# You can now access the calculated fields on the mesh:
-# mesh.rho   # Charge density
-# mesh.efield # Electric field (Ex, Ey, Ez components)
-# mesh.bfield # Magnetic field (Bx, By, Bz components)
+println("Magnetic Field at particle position: Bx=$(Bx[1]), By=$(By[1]), Bz=$(Bz[1])") 

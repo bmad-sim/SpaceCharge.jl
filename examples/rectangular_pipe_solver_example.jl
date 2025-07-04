@@ -1,26 +1,28 @@
 using SpaceCharge
 
-# Define grid parameters
+# RectangularPipe solver example: single point charge, using RectangularPipe boundary
+
+# Define grid size
 grid_size = (32, 32, 32)
-min_bounds = (-0.05, -0.05, -0.05) # meters
-max_bounds = (0.05, 0.05, 0.05)   # meters
 
-# Create a Mesh3D object
-mesh = SpaceCharge.Mesh3D(grid_size, min_bounds, max_bounds)
-
-# Define some particles (e.g., a single point charge at the center)
+# Define particle positions and charges (single point charge at origin)
 particles_x = [0.0]
 particles_y = [0.0]
 particles_z = [0.0]
-particles_q = [1.0e-9] # 1 nC charge
+particles_q = [1.0e-9]
+
+# Create a Mesh3D object with automatic bounds (default: CPU)
+mesh = Mesh3D(grid_size, particles_x, particles_y, particles_z)
 
 # Deposit particle charges onto the grid
-SpaceCharge.deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
+deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
 
-# Solve for the electric and magnetic fields using RectangularPipe boundary conditions
-SpaceCharge.solve!(mesh, SpaceCharge.RectangularPipe())
+# Solve for electric and magnetic fields (RectangularPipe boundary)
+solve!(mesh, RectangularPipe())
 
-println("Rectangular Pipe Solver Example:")
-println("  Total charge deposited: $(sum(mesh.rho))")
-println("  Electric field (first element): $(mesh.efield[1,1,1,:])")
-println("  Magnetic field (first element): $(mesh.bfield[1,1,1,:])")
+# Print field at the center of the mesh
+i = div(grid_size[1], 2)
+j = div(grid_size[2], 2)
+k = div(grid_size[3], 2)
+println("E-field at center: ", mesh.efield[i, j, k, :])
+println("B-field at center: ", mesh.bfield[i, j, k, :]) 
