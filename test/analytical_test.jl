@@ -1,6 +1,12 @@
+using SpaceCharge
+using Test
+using Random
+using LinearAlgebra
+using SpecialFunctions
+
 @testset "Analytical Comparison" begin
     # Constants
-    const EPSILON_0 = 8.8541878128e-12 # Permittivity of free space
+    EPSILON_0 = 8.8541878128e-12 # Permittivity of free space
 
     # Exact solution for isotropic Gaussian bunch
     function E_analytical(r;Q=1,σ=1)
@@ -10,12 +16,7 @@
         return Q/(4π*EPSILON_0*norm(r)^3)*(erf(norm(r)/(sqrt(2)*σ)) - sqrt(2/π)*norm(r)/σ*exp(-(norm(r)/σ)^2/2)).*r
     end
 
-    # Setup mesh and particles
-    grid_size = (32, 32, 32) # Use a smaller grid for faster testing
-    min_bounds = (-0.005, -0.005, -0.005)
-    max_bounds = (0.005, 0.005, 0.005)
-    mesh = SpaceCharge.Mesh3D(grid_size, min_bounds, max_bounds)
-
+    # Setup particles first
     num_particles = 1000000 # Fewer particles for faster testing
     total_charge = 1.0e-9
     charge_per_particle = total_charge / num_particles
@@ -27,6 +28,9 @@
     particles_y = randn(num_particles) .* sigma
     particles_z = randn(num_particles) .* sigma
     particles_q = fill(charge_per_particle, num_particles)
+
+    grid_size = (32, 32, 32)
+    mesh = SpaceCharge.Mesh3D(grid_size, particles_x, particles_y, particles_z, total_charge=total_charge)
 
     SpaceCharge.deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
     SpaceCharge.solve!(mesh, SpaceCharge.FreeSpace())
