@@ -140,7 +140,4 @@ function comprehensive_benchmark()
     end
 end
 
-# Run benchmarks if script is executed directly
-if abspath(PROGRAM_FILE) == @__FILE__
-    comprehensive_benchmark()
-end 
+comprehensive_benchmark()
