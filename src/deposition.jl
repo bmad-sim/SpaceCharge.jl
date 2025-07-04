@@ -1,5 +1,6 @@
 using KernelAbstractions
 using StaticArrays
+using Atomix
 
 """
     deposit_kernel!(rho, particles_x, particles_y, particles_z, particles_q, min_bounds, delta, grid_size)
@@ -58,15 +59,19 @@ Bounds checking is not needed as the mesh is sized to contain all particles.
 
     # --- 5. Deposit charge to all 8 neighboring grid points ---
     # No bounds checking needed since mesh is sized to contain all particles
-    rho[ix + 1, iy + 1, iz + 1] += charge * w_x0 * w_y0 * w_z0
-    rho[ix + 2, iy + 1, iz + 1] += charge * w_x1 * w_y0 * w_z0
-    rho[ix + 1, iy + 2, iz + 1] += charge * w_x0 * w_y1 * w_z0
-    rho[ix + 2, iy + 2, iz + 1] += charge * w_x1 * w_y1 * w_z0
-    rho[ix + 1, iy + 1, iz + 2] += charge * w_x0 * w_y0 * w_z1
-    rho[ix + 2, iy + 1, iz + 2] += charge * w_x1 * w_y0 * w_z1
-    rho[ix + 1, iy + 2, iz + 2] += charge * w_x0 * w_y1 * w_z1
-    rho[ix + 2, iy + 2, iz + 2] += charge * w_x1 * w_y1 * w_z1
+    # Use explicit atomic operations for thread safety
+    Atomix.@atomic rho[ix + 1, iy + 1, iz + 1] += charge * w_x0 * w_y0 * w_z0
+    Atomix.@atomic rho[ix + 2, iy + 1, iz + 1] += charge * w_x1 * w_y0 * w_z0
+    Atomix.@atomic rho[ix + 1, iy + 2, iz + 1] += charge * w_x0 * w_y1 * w_z0
+    Atomix.@atomic rho[ix + 2, iy + 2, iz + 1] += charge * w_x1 * w_y1 * w_z0
+    Atomix.@atomic rho[ix + 1, iy + 1, iz + 2] += charge * w_x0 * w_y0 * w_z1
+    Atomix.@atomic rho[ix + 2, iy + 1, iz + 2] += charge * w_x1 * w_y0 * w_z1
+    Atomix.@atomic rho[ix + 1, iy + 2, iz + 2] += charge * w_x0 * w_y1 * w_z1
+    Atomix.@atomic rho[ix + 2, iy + 2, iz + 2] += charge * w_x1 * w_y1 * w_z1
 end
+
+
+
 
 """
     deposit_vectorized!(mesh, particles_x, particles_y, particles_z, particles_q)
@@ -139,9 +144,9 @@ end
 
 Deposit particle charges onto the grid in a `Mesh3D` object.
 
-This function automatically chooses the best deposition method:
-- For CPU arrays: Uses vectorized method for best performance
-- For GPU arrays: Uses kernel-based method  
+This function automatically chooses the best deposition method based on array type:
+- For CPU arrays: Uses vectorized method for best performance  
+- For GPU arrays: Uses optimized GPU kernel
 
 # Arguments
 - `mesh`: A `Mesh3D` object.
@@ -155,16 +160,18 @@ function deposit!(
     particles_x,
     particles_y,
     particles_z,
-    particles_q,
+    particles_q
 )
     # Use vectorized method for CPU, kernel method for GPU
     if mesh.rho isa Array
         deposit_vectorized!(mesh, particles_x, particles_y, particles_z, particles_q)
     else
-        # GPU kernel method
+        # GPU method: Clear the mesh first to ensure no accumulation
+        fill!(mesh.rho, 0)
+        
+        # Run GPU kernel
         backend = get_backend(mesh.rho)
         kernel! = deposit_kernel!(backend)
-
         kernel!(
             mesh.rho,
             particles_x,
@@ -175,6 +182,7 @@ function deposit!(
             mesh.delta,
             mesh.grid_size,
             ndrange=length(particles_x),
+            workgroupsize=256,
         )
     end
 end
