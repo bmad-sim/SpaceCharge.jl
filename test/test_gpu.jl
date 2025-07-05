@@ -53,9 +53,11 @@ function run_gpu_tests()
             mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
                              T=Float32, array_type=CuArray)
             
-            # Set up a simple field pattern
-            mesh_gpu.efield[1,1,1,1] = 1.0f0
-            mesh_gpu.efield[2,1,1,1] = 2.0f0
+            # Set up a simple field pattern (use broadcasting to avoid scalar indexing)
+            efield_cpu = zeros(Float32, (6,6,6,3))
+            efield_cpu[1,1,1,1] = 1.0f0
+            efield_cpu[2,1,1,1] = 2.0f0
+            mesh_gpu.efield .= CuArray(efield_cpu)
             
             Ex_gpu, Ey_gpu, Ez_gpu, Bx_gpu, By_gpu, Bz_gpu = interpolate_field(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu)
             
@@ -82,11 +84,11 @@ function run_gpu_tests()
             particles_q_gpu = CuArray([1.0f0])
             
             mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, array_type=CuArray)
+                             T=Float32, array_type=CuArray, gamma=2.0)
             
             # Deposit charge and solve
             deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
-            solve!(mesh_gpu, FreeSpace())
+            solve!(mesh_gpu)
             
             # Check that fields are computed
             @test any(Array(mesh_gpu.efield) .!= 0.0f0)
@@ -109,7 +111,7 @@ function run_gpu_tests()
             
             # Deposit and solve
             deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
-            solve!(mesh_gpu, FreeSpace())
+            solve!(mesh_gpu)
             
             # Interpolate fields
             Ex_gpu, Ey_gpu, Ez_gpu, Bx_gpu, By_gpu, Bz_gpu = interpolate_field(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu)
@@ -135,7 +137,7 @@ function run_gpu_tests()
             # CPU mesh
             mesh_cpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; T=Float32)
             deposit!(mesh_cpu, particles_x, particles_y, particles_z, particles_q)
-            solve!(mesh_cpu, FreeSpace())
+            solve!(mesh_cpu)
             
             # GPU mesh
             particles_x_gpu = CuArray(Float32.(particles_x))
@@ -145,7 +147,7 @@ function run_gpu_tests()
             
             mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; T=Float32, array_type=CuArray)
             deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
-            solve!(mesh_gpu, FreeSpace())
+            solve!(mesh_gpu)
             
             # Check that results are similar (allowing for floating point differences)
             @test isapprox(sum(Array(mesh_gpu.rho)), sum(mesh_cpu.rho), atol=1e-5)

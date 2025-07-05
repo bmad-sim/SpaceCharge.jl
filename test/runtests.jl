@@ -17,12 +17,12 @@ include("test_gpu.jl")
     run_mesh_tests()
     run_deposition_tests()
     run_solver_tests()
-    #run_interpolation_tests()
+    run_interpolation_tests()
     
     # GPU tests only if CUDA is available
-    #if CUDA.functional()
-    #    run_gpu_tests()
-    #end
+    if CUDA.functional()
+        run_gpu_tests()
+    end
 end
 
 # Quantitative tests
