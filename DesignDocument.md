@@ -25,8 +25,7 @@ SpaceCharge.jl/
 │   ├── interpolation.jl       # Field interpolation kernels
 │   ├── green_functions.jl     # Green's function calculations
 │   ├── solvers/
-│   │   ├── free_space.jl      # Free-space and cathode image solver
-│   │   └── rectangular_pipe.jl# Rectangular pipe solver
+│   │   └── free_space.jl      # Free-space and cathode image solver
 │   ├── utils.jl               # Physical constants, helpers
 │   └── visualization.jl       # (Optional) Visualization utilities
 ├── test/                      # Unit and integration tests
