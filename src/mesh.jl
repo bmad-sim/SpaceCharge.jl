@@ -142,11 +142,11 @@ function Mesh3D(
              (max_bounds[2] - min_bounds[2]) / (grid_size[2] - 1),
              (max_bounds[3] - min_bounds[3]) / (grid_size[3] - 1))
 
-    # Patch: If any delta is zero, set it to a small value (1e-10)
+    # Patch: If any delta is zero, set it to a small value (1e-6)
     delta = (
-        delta[1] == 0 ? 1e-10 : delta[1],
-        delta[2] == 0 ? 1e-10 : delta[2],
-        delta[3] == 0 ? 1e-10 : delta[3]
+        delta[1] == 0 ? 1e-6 : delta[1],
+        delta[2] == 0 ? 1e-6 : delta[2],
+        delta[3] == 0 ? 1e-6 : delta[3]
     )
     delta = T.(delta)
 

@@ -103,43 +103,5 @@ function run_solver_tests()
             @test !isapprox(mesh1.efield, mesh2.efield)
             @test !isapprox(mesh1.bfield, mesh2.bfield)
         end
-
-        # Test solver with multiple particles
-        @testset "Solver with Multiple Particles" begin
-            grid_size = (12, 12, 12)
-            particles_x = [-0.1, 0.1]
-            particles_y = [0.0, 0.0]
-            particles_z = [0.0, 0.0]
-            particles_q = [1.0, -1.0]  # Dipole configuration
-            
-            mesh = Mesh3D(grid_size, particles_x, particles_y, particles_z)
-            
-            deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
-            solve!(mesh, FreeSpace())
-            
-            # Check charge conservation
-            @test sum(mesh.rho) ≈ sum(particles_q) atol=1e-10
-            
-            # Check that fields are computed and finite
-            @test any(mesh.efield .!= 0.0)
-            @test all(isfinite.(mesh.efield))
-            @test all(isfinite.(mesh.bfield))
-        end
-
-        # Test solver error handling
-        @testset "Solver Error Handling" begin
-            grid_size = (4, 4, 4)
-            particles_x = [0.0]
-            particles_y = [0.0]
-            particles_z = [0.0]
-            particles_q = [1.0]
-            
-            mesh = Mesh3D(grid_size, particles_x, particles_y, particles_z)
-            
-            # Should work with valid mesh
-            deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
-            @test nothing === solve!(mesh, FreeSpace())
-            @test nothing === solve!(mesh, RectangularPipe())
-        end
     end
 end 

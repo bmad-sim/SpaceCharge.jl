@@ -34,8 +34,9 @@ function solve!(mesh::Mesh3D, ::FreeSpace; at_cathode::Bool = false)
         image_mesh = deepcopy(mesh)
         image_mesh.rho .= -image_mesh.rho[:, :, end:-1:1]
 
-        offset_z =
-            2 * mesh.min_bounds[3] + (mesh.max_bounds[3] - mesh.min_bounds[3])
+        # Image charge offset for cathode at z=0: 
+        # Real charge at z, image charge at -z, distance = 2z
+        offset_z = 2 * mesh.min_bounds[3] + (mesh.max_bounds[3] - mesh.min_bounds[3])
         offset = (0.0, 0.0, offset_z)
 
         osc_freespace_solver2!(image_mesh, offset = offset)
