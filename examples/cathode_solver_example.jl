@@ -17,8 +17,8 @@ mesh = Mesh3D(grid_size, particles_x, particles_y, particles_z)
 # Deposit particle charges onto the grid
 deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
 
-# Solve for electric and magnetic fields (FreeSpace boundary, at_cathode=true)
-solve!(mesh, FreeSpace(); at_cathode=true)
+# Solve for electric and magnetic fields (at_cathode=true)
+solve!(mesh; at_cathode=true)
 
 # Interpolate fields back to particle position
 Ex, Ey, Ez, Bx, By, Bz = interpolate_field(mesh, particles_x, particles_y, particles_z)

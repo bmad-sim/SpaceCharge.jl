@@ -84,10 +84,7 @@ This TODO list tracks the implementation progress for SpaceCharge.jl based on th
 - [x] Verify `deposit!` works on GPU without changes
 - [x] Verify `solve!` works on GPU without changes
 - [ ] Verify `interpolate_field` works on GPU without changes
-- [ ] Profile GPU performance
-- [ ] Debug and fix any GPU-specific bottlenecks:
-  - [ ] Eliminate scalar indexing
-  - [ ] Optimize memory transfers
+- [x] Profile GPU performance
 - [x] Benchmark CPU vs GPU performance
 
 ### 4.2 Implement Cathode Image Solver
@@ -100,35 +97,18 @@ This TODO list tracks the implementation progress for SpaceCharge.jl based on th
 - [x] Handle B-field sign correction for image charges
 - [ ] Test cathode solver with known solutions
 
-## Phase 5: Rectangular Pipe Solver
+## Phase 5: Finalization and Documentation
 
-### 5.1 Implement Rectangular Pipe Solver
-- [x] Create `solvers/rect_pipe.jl` file
-- [x] Define `RectangularPipe` boundary condition type
-- [x] Translate `rfun` (pipe Green's function) from Fortran
-- [x] Implement series summation for pipe Green's function
-- [x] Write pipe Green's function as a kernel
-- [x] Implement four-term convolution-correlation logic:
-  - [x] FFT convolution terms
-  - [x] FFT correlation terms
-  - [x] Proper handling of `fft` vs `bfft`
-- [ ] Test rectangular pipe solver on CPU
-- [ ] Optimize and test on GPU (pending full `rfun` implementation)
-- [ ] Validate against analytical solutions where possible (pending full `rfun` implementation)
-
-## Phase 6: Finalization and Documentation
-
-### 6.1 Comprehensive Testing
-- [ ] Add tests for all boundary conditions:
+### 5.1 Comprehensive Testing
+- [x] Add tests for all boundary conditions:
   - [x] Free space solver tests
-  - [ ] Cathode image solver tests
-  - [ ] Rectangular pipe solver tests
+  - [x] Cathode image solver tests
 - [ ] Compare numerical outputs against Fortran code
 - [ ] Add edge case and error handling tests
 - [ ] Add performance regression tests
 - [ ] Ensure 100% test coverage for core functionality
 
-### 6.2 Documentation and Examples
+### 5.2 Documentation and Examples
 - [x] Write docstrings for all public functions and structs
 - [x] Create comprehensive `README.md`
 - [x] Create `examples/` directory with usage examples:
@@ -140,7 +120,7 @@ This TODO list tracks the implementation progress for SpaceCharge.jl based on th
 - [x] Add inline code documentation
 - [x] Create performance comparison documentation
 
-### 6.3 API Refinements
+### 5.3 API Refinements
 - [ ] Review and clean up user-facing API
 - [ ] Ensure keyword arguments for all optional flags:
   - [ ] `direct_field_calc`
@@ -150,7 +130,7 @@ This TODO list tracks the implementation progress for SpaceCharge.jl based on th
 - [ ] Implement sensible defaults for all parameters
 - [ ] Add convenience constructors and helper functions
 
-### 6.4 Package Registration
+### 5.4 Package Registration
 - [x] Finalize package metadata in `Project.toml`
 - [x] Add license file
 - [ ] Create GitHub repository with CI/CD

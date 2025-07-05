@@ -17,7 +17,7 @@ function run_solver_tests()
             deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
             
             # Solve for fields
-            solve!(mesh, FreeSpace())
+            solve!(mesh)
             
             # Check that the sum of rho is conserved
             @test sum(mesh.rho) ≈ sum(particles_q) atol=1e-10
@@ -42,12 +42,12 @@ function run_solver_tests()
             mesh = Mesh3D(grid_size, particles_x, particles_y, particles_z; gamma=2.0)
             
             deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
-            solve!(mesh, FreeSpace(); at_cathode=true)
+            solve!(mesh; at_cathode=true)
             
             # Create comparison mesh without cathode
             mesh_free_space = Mesh3D(grid_size, particles_x, particles_y, particles_z; gamma=2.0)
             deposit!(mesh_free_space, particles_x, particles_y, particles_z, particles_q)
-            solve!(mesh_free_space, FreeSpace())
+            solve!(mesh_free_space)
             
             # Fields should be different with cathode
             @test !isapprox(mesh.efield, mesh_free_space.efield)
@@ -57,28 +57,6 @@ function run_solver_tests()
             @test any(mesh.efield .!= 0.0)
             @test all(isfinite.(mesh.efield))
             @test all(isfinite.(mesh.bfield))
-        end
-
-        # Test RectangularPipe Solver
-        @testset "RectangularPipe Solver" begin
-            grid_size = (16, 16, 16)
-            particles_x = [0.0]
-            particles_y = [0.0]
-            particles_z = [0.0]
-            particles_q = [1.0]
-            
-            mesh = Mesh3D(grid_size, particles_x, particles_y, particles_z)
-            
-            deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
-            solve!(mesh, RectangularPipe())
-            
-            # Check that fields are computed and finite
-            @test any(mesh.efield .!= 0.0)
-            @test all(isfinite.(mesh.efield))
-            @test all(isfinite.(mesh.bfield))
-            
-            # Check charge conservation
-            @test sum(mesh.rho) ≈ sum(particles_q) atol=1e-10
         end
 
         # Test solver with different gamma values
@@ -92,12 +70,12 @@ function run_solver_tests()
             # Test with gamma = 1.0 (non-relativistic)
             mesh1 = Mesh3D(grid_size, particles_x, particles_y, particles_z; gamma=1.0)
             deposit!(mesh1, particles_x, particles_y, particles_z, particles_q)
-            solve!(mesh1, FreeSpace())
+            solve!(mesh1)
             
             # Test with gamma = 10.0 (relativistic)
             mesh2 = Mesh3D(grid_size, particles_x, particles_y, particles_z; gamma=10.0)
             deposit!(mesh2, particles_x, particles_y, particles_z, particles_q)
-            solve!(mesh2, FreeSpace())
+            solve!(mesh2)
             
             # Fields should be different for different gamma values
             @test !isapprox(mesh1.efield, mesh2.efield)

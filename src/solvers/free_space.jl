@@ -3,21 +3,7 @@ using AbstractFFTs
 using FFTW
 
 """
-    abstract type BoundaryCondition end
-
-Abstract type for defining different boundary conditions for space charge solvers.
-"""
-abstract type BoundaryCondition end
-
-"""
-    struct FreeSpace <: BoundaryCondition
-
-Represents free-space boundary conditions.
-"""
-struct FreeSpace <: BoundaryCondition end
-
-"""
-    solve!(mesh::Mesh3D, ::FreeSpace; at_cathode::Bool = false)
+    solve!(mesh::Mesh3D; at_cathode::Bool = false)
 
 Solves the space charge problem for free-space boundary conditions.
 
@@ -25,7 +11,7 @@ Solves the space charge problem for free-space boundary conditions.
 - `mesh`: A `Mesh3D` object containing the charge density and where the fields will be stored.
 - `at_cathode`: A boolean indicating whether to model a cathode at z=0.
 """
-function solve!(mesh::Mesh3D, ::FreeSpace; at_cathode::Bool = false)
+function solve!(mesh::Mesh3D; at_cathode::Bool = false)
     # Real charge field
     osc_freespace_solver2!(mesh, offset = (0.0, 0.0, 0.0))
 

@@ -51,21 +51,15 @@ SpaceCharge.jl/
 ### 3.2 Field Solve (solve!)
 - **Purpose:** Compute the electric and magnetic fields on the grid from the deposited charge density, using FFT-based convolution with integrated Green's functions (IGF).
 - **Implementation:**
-  - The main solver is dispatched via `solve!(mesh, ::BoundaryCondition; kwargs...)`.
-  - **Free Space Solver:**
-    - Pads the charge density array to double size for convolution.
-    - Computes the integrated Green's function (potential and field components) using a kernel (`osc_get_cgrn_freespace!`).
-    - Both charge and Green's function arrays are FFT'd (using `AbstractFFTs.jl` for CPU/GPU abstraction).
-    - The convolution is performed in Fourier space (element-wise multiplication), then inverse FFT'd.
-    - The result is extracted from the padded array and stored in `mesh.efield` and `mesh.phi`.
-    - The B-field is computed from the E-field using relativistic formulas.
-    - If `at_cathode=true`, an image charge is created by flipping and negating the charge density, and the solver is run again with an offset; the fields are superposed with correct sign handling.
-  - **Rectangular Pipe Solver:**
-    - Uses a series-sum Green's function (`rfun`) for the pipe geometry.
-    - Four Green's function arrays are generated for the convolution-correlation logic.
-    - FFTs and inverse FFTs are used for efficient convolution/correlation.
-    - The electric field is computed from the potential using finite differences; the B-field is derived similarly to the free-space case.
-  - **Extensibility:** New solvers can be added by subtyping `BoundaryCondition` and implementing `solve!` for the new type.
+  - The main solver is `solve!(mesh; kwargs...)`.
+  - Pads the charge density array to double size for convolution.
+  - Computes the integrated Green's function (potential and field components) using a kernel (`osc_get_cgrn_freespace!`).
+  - Both charge and Green's function arrays are FFT'd (using `AbstractFFTs.jl` for CPU/GPU abstraction).
+  - The convolution is performed in Fourier space (element-wise multiplication), then inverse FFT'd.
+  - The result is extracted from the padded array and stored in `mesh.efield` and `mesh.phi`.
+  - The B-field is computed from the E-field using relativistic formulas.
+  - If `at_cathode=true`, an image charge is created by flipping and negating the charge density, and the solver is run again with an offset; the fields are superposed with correct sign handling.
+ 
 
 ### 3.3 Field Interpolation (interpolate_field)
 - **Purpose:** Interpolate the computed electric and magnetic fields from the grid to arbitrary particle positions.
@@ -84,7 +78,6 @@ SpaceCharge.jl/
 
 ### 4.2 Modularity & Extensibility
 - Each major algorithmic component (deposition, interpolation, solvers) is in its own file/module.
-- New solvers or boundary conditions are added by subtyping `BoundaryCondition` and implementing `solve!` for the new type.
 - Green's function logic is abstracted for reuse and extension.
 
 ### 4.3 CPU/GPU Abstraction
@@ -96,10 +89,9 @@ SpaceCharge.jl/
 - **Main API Functions:**
   - `Mesh3D(...)` – Flexible constructors for mesh setup (auto or manual bounds).
   - `deposit!`, `clear_mesh!` – Particle-to-grid deposition and mesh reset.
-  - `solve!(mesh, ::BoundaryCondition; kwargs...)` – Field solver, dispatches on boundary type (e.g., `FreeSpace`, `RectangularPipe`).
+  - `solve!(mesh; kwargs...)` – Field solver for free space.
   - `interpolate_field(mesh, x, y, z)` – Field interpolation at arbitrary points.
 - **Keyword Arguments:** Used for all optional solver flags (e.g., `at_cathode`).
-- **Extensibility:** New boundary conditions or solvers can be added by implementing new subtypes and methods.
 
 ### 4.5 Testing & Validation
 - **Test Organization:** Each major module has a corresponding test file (e.g., `test_deposition.jl`, `test_solvers.jl`).

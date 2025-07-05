@@ -34,7 +34,7 @@ function main()
     particles_q = fill(charge_per_particle, num_particles)
 
     SpaceCharge.deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
-    SpaceCharge.solve!(mesh, SpaceCharge.FreeSpace())
+    SpaceCharge.solve!(mesh)
 
     # Extract data for plotting along z-axis (x=0, y=0)
     z_coords = [mesh.min_bounds[3] + (k - 1) * mesh.delta[3] for k in 1:grid_size[3]]
