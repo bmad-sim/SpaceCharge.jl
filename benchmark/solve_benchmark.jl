@@ -44,7 +44,7 @@ function test_correctness(grid_size, n_particles; total_charge=1.0e-9, sigma=0.0
     deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
     
     # Solve for fields
-    solve!(mesh, FreeSpace())
+    solve!(mesh)
     
     # Extract data for comparison along z-axis (x=0, y=0)
     z_coords = [mesh.min_bounds[3] + (k - 1) * mesh.delta[3] for k in 1:grid_size[3]]
@@ -87,7 +87,7 @@ function compare_cpu_gpu_solve(grid_size, n_particles; total_charge=1.0e-9, sigm
     println("Benchmarking CPU...")
     mesh_cpu = Mesh3D(grid_size, particles_x, particles_y, particles_z, total_charge=total_charge)
     deposit!(mesh_cpu, particles_x, particles_y, particles_z, particles_q)
-    cpu_time = @belapsed solve!($mesh_cpu, FreeSpace())
+    cpu_time = @belapsed solve!($mesh_cpu)
 
     # Correctness: compare Ez along z-axis to analytical
     z_coords = [mesh_cpu.min_bounds[3] + (k - 1) * mesh_cpu.delta[3] for k in 1:grid_size[3]]
@@ -112,7 +112,7 @@ function compare_cpu_gpu_solve(grid_size, n_particles; total_charge=1.0e-9, sigm
         mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; array_type=CuArray, total_charge=total_charge)
         deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
         gpu_time = @belapsed begin
-            solve!($mesh_gpu, FreeSpace())
+            solve!($mesh_gpu)
             CUDA.synchronize()
         end
         # Compare Ez along z-axis
