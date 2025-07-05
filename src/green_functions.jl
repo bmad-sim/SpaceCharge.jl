@@ -1,7 +1,17 @@
 using KernelAbstractions
 using StaticArrays
 
-@inline function lafun2(x, y, z)
+"""
+    potential_green_function(x, y, z)
+
+The indefinite integral:
+∫∫∫ 1/r dx dy dz = 
+        -z^2*atan(x*y/(z*r))/2 - y^2*atan(x*z/(y*r))/2 -x^2*atan(y*z/(x*r))/2 
+        +y*z*log(x+r) + x*z*log(y+r) + x*y*log(z+r)
+        
+This corresponds to the scalar potential.
+"""
+@inline function potential_green_function(x, y, z)
     r = sqrt(x^2 + y^2 + z^2)
     if r == 0.0
         return 0.0
@@ -11,7 +21,16 @@ using StaticArrays
            x * z * log(y + r) + x * y * log(z + r)
 end
 
-@inline function xlafun2(x, y, z)
+"""
+    field_green_function(x, y, z)
+
+The indefinite integral:
+∫∫∫ x/r^3 dx dy dz = x*atan((y*z)/(r*x)) -z*log(r+y) + y*log((r-z)/(r+z))/2
+
+This corresponds to the electric field component Ex.
+Other components can be computed by permuting the arguments.
+"""
+@inline function field_green_function(x, y, z)
     r = sqrt(x^2 + y^2 + z^2)
     if r == 0.0
         return 0.0
@@ -20,7 +39,7 @@ end
 end
 
 
-function osc_get_cgrn_freespace!(
+function get_green_function!(
     cgrn,
     delta,
     gamma,
@@ -68,13 +87,13 @@ end
     w = (k - 1) * dz + wmin
 
     gval = if icomp == 0
-        lafun2(u, v, w) * factor
+        potential_green_function(u, v, w) * factor
     elseif icomp == 1
-        xlafun2(u, v, w) * factor
+        field_green_function(u, v, w) * factor
     elseif icomp == 2
-        xlafun2(v, w, u) * factor
+        field_green_function(v, w, u) * factor
     elseif icomp == 3
-        xlafun2(w, u, v) * factor
+        field_green_function(w, u, v) * factor
     else
         0.0
     end

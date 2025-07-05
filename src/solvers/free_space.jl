@@ -13,7 +13,7 @@ Solves the space charge problem for free-space boundary conditions.
 """
 function solve!(mesh::Mesh3D; at_cathode::Bool = false)
     # Real charge field
-    osc_freespace_solver2!(mesh, offset = (0.0, 0.0, 0.0))
+    solve_freespace!(mesh, offset = (0.0, 0.0, 0.0))
 
     if at_cathode
         # Image charge field
@@ -25,7 +25,7 @@ function solve!(mesh::Mesh3D; at_cathode::Bool = false)
         offset_z = 2 * mesh.min_bounds[3] + (mesh.max_bounds[3] - mesh.min_bounds[3])
         offset = (0.0, 0.0, offset_z)
 
-        osc_freespace_solver2!(image_mesh, offset = offset)
+        solve_freespace!(image_mesh, offset = offset)
 
         # Superposition of fields
         mesh.efield .+= image_mesh.efield
@@ -39,13 +39,13 @@ function solve!(mesh::Mesh3D; at_cathode::Bool = false)
 end
 
 """
-    osc_freespace_solver2!(mesh; offset = (0.0, 0.0, 0.0))
+    solve_freespace!(mesh; offset = (0.0, 0.0, 0.0))
 
 Optimized free-space solver for computing electric and magnetic fields from charge density.
 Uses pre-allocated workspace arrays, cached in-place FFT plans, and CPU multi-threading for 
 optimal performance on both CPU and GPU.
 """
-function osc_freespace_solver2!(mesh; offset = (0.0, 0.0, 0.0))
+function solve_freespace!(mesh; offset = (0.0, 0.0, 0.0))
     nx, ny, nz = mesh.grid_size
 
     # Set FFTW to use all available threads for optimal CPU performance
@@ -72,7 +72,7 @@ function osc_freespace_solver2!(mesh; offset = (0.0, 0.0, 0.0))
     # Loop over phi, Ex, Ey, Ez with optimized operations
     for icomp = 0:3
         # Get Green's function (reuse cgrn array)
-        osc_get_cgrn_freespace!(
+        get_green_function!(
             cgrn,
             mesh.delta,
             mesh.gamma,
