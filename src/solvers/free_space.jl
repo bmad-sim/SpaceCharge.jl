@@ -1,5 +1,6 @@
 using KernelAbstractions
 using AbstractFFTs
+using FFTW
 
 """
     abstract type BoundaryCondition end
@@ -53,27 +54,37 @@ end
 """
     osc_freespace_solver2!(mesh; offset = (0.0, 0.0, 0.0))
 
-Julia implementation of the Fortran `osc_freespace_solver2` subroutine.
+Optimized free-space solver for computing electric and magnetic fields from charge density.
+Uses pre-allocated workspace arrays, cached in-place FFT plans, and CPU multi-threading for 
+optimal performance on both CPU and GPU.
 """
 function osc_freespace_solver2!(mesh; offset = (0.0, 0.0, 0.0))
     nx, ny, nz = mesh.grid_size
-    nx2, ny2, nz2 = 2nx, 2ny, 2nz
 
-    # Allocate complex arrays
-    crho = similar(mesh.rho, ComplexF64, nx2, ny2, nz2)
+    # Set FFTW to use all available threads for optimal CPU performance
+    FFTW.set_num_threads(Threads.nthreads())
+
+    # Get pre-allocated workspace (lazy initialization)
+    workspace = _get_workspace(mesh)
+    crho = workspace.crho
+    cgrn = workspace.cgrn
+    temp_result = workspace.temp_result
+    fft_plan_inplace = workspace.fft_plan_inplace
+    ifft_plan_inplace = workspace.ifft_plan_inplace
+
+    # Clear and setup charge density array
     fill!(crho, 0.0)
-    cgrn = similar(crho)
-
-    # Copy rho to padded array
     crho[1:nx, 1:ny, 1:nz] .= mesh.rho
 
-    # FFT of charge density
-    fft_plan = plan_fft(crho)
-    fft_rho = fft_plan * crho
+    # In-place FFT of charge density
+    fft_plan_inplace * crho
 
-    # Loop over phi, Ex, Ey, Ez
+    # Normalization factor: 1/(4 pi eps0)
+    factr = (299792458.0^2 * 1.00000000055e-7)
+
+    # Loop over phi, Ex, Ey, Ez with optimized operations
     for icomp = 0:3
-        # Get Green's function
+        # Get Green's function (reuse cgrn array)
         osc_get_cgrn_freespace!(
             cgrn,
             mesh.delta,
@@ -82,36 +93,28 @@ function osc_freespace_solver2!(mesh; offset = (0.0, 0.0, 0.0))
             offset = offset,
         )
 
-        # FFT of Green's function (no fftshift)
-        fft_grn = fft_plan * cgrn
+        # In-place FFT of Green's function
+        fft_plan_inplace * cgrn
 
-        # Convolution
-        conv_fft = fft_rho .* fft_grn
+        # Convolution (vectorized operation)
+        @. temp_result = crho * cgrn
 
-        # Inverse FFT
-        ifft_plan = plan_ifft(conv_fft)
-        result = ifft_plan * conv_fft
+        # In-place inverse FFT
+        ifft_plan_inplace * temp_result
 
-        # Normalization factor: 1/(4 pi eps0)
-        factr = (299792458.0^2 * 1.00000000055e-7)
-
-        # Extract field/potential using manual slicing to match Fortran
+        # Extract field/potential using optimized slicing
         ishift, jshift, kshift = nx - 1, ny - 1, nz - 1
         if icomp == 0
-            if isdefined(mesh, :phi)
-                mesh.phi .= factr * real.(result[1+ishift:nx+ishift, 1+jshift:ny+jshift, 1+kshift:nz+kshift])
-            end
+            @views @. mesh.phi = factr * real(temp_result[1+ishift:nx+ishift, 1+jshift:ny+jshift, 1+kshift:nz+kshift])
         else
-            mesh.efield[:, :, :, icomp] .= factr * real.(result[1+ishift:nx+ishift, 1+jshift:ny+jshift, 1+kshift:nz+kshift])
+            @views @. mesh.efield[:, :, :, icomp] = factr * real(temp_result[1+ishift:nx+ishift, 1+jshift:ny+jshift, 1+kshift:nz+kshift])
         end
     end
 
-    # Calculate B-field
-    if isdefined(mesh, :bfield)
-        beta = sqrt(1 - 1 / mesh.gamma^2)
-        clight = 299792458.0
-        mesh.bfield[:, :, :, 1] = -(beta / clight) * mesh.efield[:, :, :, 2]
-        mesh.bfield[:, :, :, 2] = (beta / clight) * mesh.efield[:, :, :, 1]
-        mesh.bfield[:, :, :, 3] .= 0.0
-    end
+    # Calculate B-field with vectorized operations
+    beta = sqrt(1 - 1 / mesh.gamma^2)
+    clight = 299792458.0
+    @. mesh.bfield[:, :, :, 1] = -(beta / clight) * mesh.efield[:, :, :, 2]
+    @. mesh.bfield[:, :, :, 2] = (beta / clight) * mesh.efield[:, :, :, 1]
+    fill!(view(mesh.bfield, :, :, :, 3), 0.0)
 end

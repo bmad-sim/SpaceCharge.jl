@@ -1,4 +1,5 @@
 using Adapt
+using AbstractFFTs
 
 """
     Mesh3D{T, A}
@@ -16,6 +17,7 @@ A struct to represent a 3D Cartesian mesh.
 - `phi::A`:                      Electric potential array.
 - `efield::AbstractArray{T, 4}`: Electric field array with the last dimension for components (x, y, z).
 - `bfield::AbstractArray{T, 4}`: Magnetic field array with the last dimension for components (x, y, z).
+- `_workspace::Union{Nothing, NamedTuple}`: Internal workspace for solver optimization (pre-allocated arrays and FFT plans).
 """
 mutable struct Mesh3D{T <: AbstractFloat, A <: AbstractArray{T}}
     # Grid dimensions
@@ -32,6 +34,46 @@ mutable struct Mesh3D{T <: AbstractFloat, A <: AbstractArray{T}}
     phi::A
     efield::AbstractArray{T, 4} # Last dimension for component (x,y,z)
     bfield::AbstractArray{T, 4}
+    # Optimization workspace (lazy initialization)
+    _workspace::Union{Nothing, NamedTuple}
+end
+
+"""
+    _get_workspace(mesh::Mesh3D)
+
+Get or create the workspace for the mesh. This includes pre-allocated arrays 
+and cached in-place FFT plans for maximum performance of the free space solver.
+
+The workspace contains:
+- `crho`: Complex charge density array (doubled size for FFT padding)
+- `cgrn`: Complex Green's function array 
+- `temp_result`: Complex temporary result array
+- `fft_plan_inplace`: Cached in-place forward FFT plan
+- `ifft_plan_inplace`: Cached in-place inverse FFT plan
+"""
+function _get_workspace(mesh::Mesh3D{T, A}) where {T, A}
+    if mesh._workspace === nothing
+        nx, ny, nz = mesh.grid_size
+        nx2, ny2, nz2 = 2nx, 2ny, 2nz
+        
+        # Pre-allocate workspace arrays
+        crho = similar(mesh.rho, ComplexF64, nx2, ny2, nz2)
+        cgrn = similar(mesh.rho, ComplexF64, nx2, ny2, nz2)
+        temp_result = similar(mesh.rho, ComplexF64, nx2, ny2, nz2)
+        
+        # Create in-place FFT plans (optimized for memory efficiency)
+        fft_plan_inplace = plan_fft!(crho)
+        ifft_plan_inplace = plan_ifft!(temp_result)
+        
+        mesh._workspace = (
+            crho = crho,
+            cgrn = cgrn,
+            temp_result = temp_result,
+            fft_plan_inplace = fft_plan_inplace,
+            ifft_plan_inplace = ifft_plan_inplace,
+        )
+    end
+    return mesh._workspace
 end
 
 """
@@ -140,6 +182,7 @@ function Mesh3D(
         phi,
         efield,
         bfield,
+        nothing,
     )
 end
 
@@ -215,5 +258,6 @@ function Mesh3D(
         phi,
         efield,
         bfield,
+        nothing,
     )
 end
