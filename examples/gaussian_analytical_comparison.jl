@@ -15,9 +15,6 @@ end
 function main()
     # Setup mesh and particles
     grid_size = (32, 32, 32)
-    min_bounds = (-0.006, -0.006, -0.006)
-    max_bounds = (0.006, 0.006, 0.006)
-    mesh = SpaceCharge.Mesh3D(grid_size, min_bounds, max_bounds)
 
     num_particles = 10000000
     total_charge = 1.0e-9
@@ -33,8 +30,9 @@ function main()
     particles_z = randn(num_particles) .* sigma_z
     particles_q = fill(charge_per_particle, num_particles)
 
-    SpaceCharge.deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
-    SpaceCharge.solve!(mesh)
+    mesh = Mesh3D(grid_size, particles_x, particles_y, particles_z, total_charge=total_charge)
+    deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
+    solve!(mesh)
 
     # Extract data for plotting along z-axis (x=0, y=0)
     z_coords = [mesh.min_bounds[3] + (k - 1) * mesh.delta[3] for k in 1:grid_size[3]]
