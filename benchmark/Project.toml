@@ -5,6 +5,7 @@ LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SpaceCharge = "886cafed-6ce3-46b8-9147-fe45a2210a4b"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
+StatProfilerHTML = "a8a75453-ed82-57c9-9e16-4cd1196ecbf5"
 
 [compat]
 BenchmarkTools = "1.3"
