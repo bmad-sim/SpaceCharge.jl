@@ -40,12 +40,12 @@ end
 
 
 function get_green_function!(
-    cgrn,
-    delta,
-    gamma,
-    icomp;
-    offset = (0.0, 0.0, 0.0),
-)
+    cgrn::A,
+    delta::NTuple{3, T},
+    gamma::T,
+    icomp::Int;
+    offset::NTuple{3, T} = (0.0, 0.0, 0.0)
+) where {T<:AbstractFloat, A<:AbstractArray}
     isize, jsize, ksize = size(cgrn)
 
     # Populate cgrn with pointwise Green's function

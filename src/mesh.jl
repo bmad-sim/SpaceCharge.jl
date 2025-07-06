@@ -39,7 +39,7 @@ mutable struct Mesh3D{T <: AbstractFloat, A <: AbstractArray{T}}
 end
 
 """
-    _get_workspace(mesh::Mesh3D)
+    _get_workspace(mesh::Mesh3D{T, A}) where {T<:AbstractFloat, A<:AbstractArray}
 
 Get or create the workspace for the mesh. This includes pre-allocated arrays 
 and cached in-place FFT plans for maximum performance of the free space solver.
@@ -51,15 +51,15 @@ The workspace contains:
 - `fft_plan_inplace`: Cached in-place forward FFT plan
 - `ifft_plan_inplace`: Cached in-place inverse FFT plan
 """
-function _get_workspace(mesh::Mesh3D{T, A}) where {T, A}
+function _get_workspace(mesh::Mesh3D{T, A}) where {T<:AbstractFloat, A<:AbstractArray}
     if mesh._workspace === nothing
         nx, ny, nz = mesh.grid_size
         nx2, ny2, nz2 = 2nx, 2ny, 2nz
         
         # Pre-allocate workspace arrays
-        crho = similar(mesh.rho, ComplexF64, nx2, ny2, nz2)
-        cgrn = similar(mesh.rho, ComplexF64, nx2, ny2, nz2)
-        temp_result = similar(mesh.rho, ComplexF64, nx2, ny2, nz2)
+        crho = similar(mesh.rho, Complex{T}, nx2, ny2, nz2)
+        cgrn = similar(mesh.rho, Complex{T}, nx2, ny2, nz2)
+        temp_result = similar(mesh.rho, Complex{T}, nx2, ny2, nz2)
         
         # Create in-place FFT plans (optimized for memory efficiency)
         fft_plan_inplace = plan_fft!(crho)

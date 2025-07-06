@@ -39,13 +39,13 @@ function solve!(mesh::Mesh3D; at_cathode::Bool = false)
 end
 
 """
-    solve_freespace!(mesh; offset = (0.0, 0.0, 0.0))
+    solve_freespace!(mesh::Mesh3D{T, A}; offset::NTuple{3, T} = (0.0, 0.0, 0.0)) where {T<:AbstractFloat, A<:AbstractArray}
 
 Optimized free-space solver for computing electric and magnetic fields from charge density.
 Uses pre-allocated workspace arrays, cached in-place FFT plans, and CPU multi-threading for 
 optimal performance on both CPU and GPU.
 """
-function solve_freespace!(mesh; offset = (0.0, 0.0, 0.0))
+function solve_freespace!(mesh::Mesh3D{T, A}; offset::NTuple{3, T} = (0.0, 0.0, 0.0)) where {T<:AbstractFloat, A<:AbstractArray}
     nx, ny, nz = mesh.grid_size
 
     # Set FFTW to use all available threads for optimal CPU performance
