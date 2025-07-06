@@ -4,12 +4,11 @@ using BenchmarkTools
 using Random
 using LinearAlgebra
 using SpecialFunctions
-using Test
 
 """
 Constants for analytical calculations
 """
-const EPSILON_0 = 8.8541878128e-12 # Permittivity of free space
+EPSILON_0 = 8.8541878128e-12 # Permittivity of free space
 
 """
 Exact analytical solution for isotropic Gaussian bunch
