@@ -54,15 +54,10 @@ function get_green_function!(
     kernel!(cgrn, delta, gamma, icomp, offset, ndrange = size(cgrn))
 
     # Apply 8-point differencing to compute integrated Green's function
-    @views cgrn[1:isize-1, 1:jsize-1, 1:ksize-1] .=
-        cgrn[2:isize, 2:jsize, 2:ksize] .-
-        cgrn[1:isize-1, 2:jsize, 2:ksize] .-
-        cgrn[2:isize, 1:jsize-1, 2:ksize] .-
-        cgrn[2:isize, 2:jsize, 1:ksize-1] .-
-        cgrn[1:isize-1, 1:jsize-1, 1:ksize-1] .+
-        cgrn[1:isize-1, 1:jsize-1, 2:ksize] .+
-        cgrn[1:isize-1, 2:jsize, 1:ksize-1] .+
-        cgrn[2:isize, 1:jsize-1, 1:ksize-1]
+    # Use optimized kernel to avoid memory allocations
+    backend = get_backend(cgrn)
+    differencing_kernel! = apply_8point_differencing!(backend)
+    differencing_kernel!(cgrn, ndrange = (isize-1, jsize-1, ksize-1))
 end
 
 @kernel function get_green_kernel!(cgrn, delta, gamma, icomp, offset)
@@ -99,4 +94,15 @@ end
     end
 
     cgrn[i, j, k] = complex(gval, 0.0)
+end
+
+@kernel function apply_8point_differencing!(cgrn)
+    i, j, k = @index(Global, NTuple)
+    
+    # Compute 8-point finite difference stencil in-place
+    # This avoids all temporary array allocations
+    cgrn[i, j, k] = cgrn[i+1, j+1, k+1] - cgrn[i, j+1, k+1] - 
+                    cgrn[i+1, j, k+1] - cgrn[i+1, j+1, k] - 
+                    cgrn[i, j, k] + cgrn[i, j, k+1] + 
+                    cgrn[i, j+1, k] + cgrn[i+1, j, k]
 end
