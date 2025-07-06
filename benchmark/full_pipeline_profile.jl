@@ -84,6 +84,8 @@ function main()
     if profile_cpu
         try
             println("\nProfiling CPU full pipeline (function-level)...")
+            # Warm-up run (not profiled)
+            run_cpu_full_pipeline((64, 64, 64), 100_000)
             Profile.clear()
             Profile.init()
             @profile run_cpu_full_pipeline((64, 64, 64), 100_000)
@@ -102,6 +104,8 @@ function main()
         try
             if CUDA.functional()
                 println("\nProfiling GPU full pipeline (kernel-level)...")
+                # Warm-up run (not profiled)
+                run_gpu_full_pipeline((64, 64, 64), 100_000)
                 try
                     CUDA.@profile run_gpu_full_pipeline((64, 64, 64), 100_000)
                     println("[Info] CUDA profiling complete. Use NVIDIA Nsight Systems or nvprof to analyze the results if available.")
