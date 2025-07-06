@@ -2,7 +2,6 @@ using SpaceCharge
 using CUDA
 using BenchmarkTools
 using Random
-using Test
 
 """
 Benchmark deposit! + solve! + interpolate_field for CPU and GPU
