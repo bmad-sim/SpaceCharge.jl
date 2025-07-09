@@ -44,7 +44,7 @@ function get_green_function!(
     delta::NTuple{3, T},
     gamma::T,
     icomp::Int;
-    offset::NTuple{3, T} = (0.0, 0.0, 0.0)
+    offset::NTuple{3, T} = (zero(T), zero(T), zero(T))
 ) where {T<:AbstractFloat, A<:AbstractArray}
     isize, jsize, ksize = size(cgrn)
 
