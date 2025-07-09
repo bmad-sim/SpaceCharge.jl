@@ -32,9 +32,6 @@ Other components can be computed by permuting the arguments.
 """
 @inline function field_green_function(x, y, z)
     r = sqrt(x^2 + y^2 + z^2)
-    if r == 0.0
-        return 0.0
-    end
     return x * atan((y * z) / (r * x)) - z * log(r + y) + y * log((r - z) / (r + z)) / 2
 end
 
