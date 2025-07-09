@@ -81,9 +81,7 @@ end
     v = (j - 1) * dy + vmin
     w = (k - 1) * dz + wmin
 
-    gval = if icomp == 0
-        potential_green_function(u, v, w) * factor
-    elseif icomp == 1
+    gval = if icomp == 1
         field_green_function(u, v, w) * factor
     elseif icomp == 2
         field_green_function(v, w, u) * factor
