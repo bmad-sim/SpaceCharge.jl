@@ -36,7 +36,7 @@ end
 """
     solve_freespace!(mesh::Mesh3D{T, A, B}; offset::NTuple{3, T} = (zero(T), zero(T), zero(T))) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
 
-Optimized free-space solver for computing electric and magnetic fields from charge density.
+Optimized free-space solver for computing electric field from charge density.
 Uses pre-allocated workspace arrays, cached in-place FFT plans, and CPU multi-threading for 
 optimal performance on both CPU and GPU.
 """

@@ -48,7 +48,7 @@ SpaceCharge.jl/
   - The main entry point is `deposit!(mesh, x, y, z, q)`, which dispatches to the appropriate backend.
 
 ### 3.2 Field Solve (solve!)
-- **Purpose:** Compute the electric and magnetic fields on the grid from the deposited charge density, using FFT-based convolution with integrated Green's functions (IGF).
+- **Purpose:** Compute the electric field on the grid from the deposited charge density, using FFT-based convolution with integrated Green's functions (IGF).
 - **Implementation:**
   - The main solver is `solve!(mesh; kwargs...)`.
   - Pads the charge density array to double size for convolution.
@@ -56,12 +56,12 @@ SpaceCharge.jl/
   - Both charge and Green's function arrays are FFT'd (using `AbstractFFTs.jl` for CPU/GPU abstraction).
   - The convolution is performed in Fourier space (element-wise multiplication), then inverse FFT'd.
   - The result is extracted from the padded array and stored in `mesh.efield` and `mesh.phi`.
-  - The B-field is computed from the E-field using relativistic formulas.
+  
   - If `at_cathode=true`, an image charge is created by flipping and negating the charge density, and the solver is run again with an offset; the fields are superposed with correct sign handling.
  
 
 ### 3.3 Field Interpolation (interpolate_field)
-- **Purpose:** Interpolate the computed electric and magnetic fields from the grid to arbitrary particle positions.
+- **Purpose:** Interpolate the computed electric field from the grid to arbitrary particle positions.
 - **Implementation:**
   - The `interpolate_kernel!` is written using `KernelAbstractions.jl` for CPU/GPU support.
   - For each particle, the field is interpolated from the 8 nearest grid points using trilinear weights.

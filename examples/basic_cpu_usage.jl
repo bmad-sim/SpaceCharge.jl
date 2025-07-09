@@ -17,11 +17,10 @@ mesh = Mesh3D(grid_size, particles_x, particles_y, particles_z)
 # Deposit particle charges onto the grid
 deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
 
-# Solve for electric and magnetic fields
+# Solve for electric field
 solve!(mesh)
 
 # Interpolate fields back to particle positions
-Ex, Ey, Ez, Bx, By, Bz = interpolate_field(mesh, particles_x, particles_y, particles_z)
+Ex, Ey, Ez = interpolate_field(mesh, particles_x, particles_y, particles_z)
 
-println("Electric Field at particle position: Ex=$(Ex[1]), Ey=$(Ey[1]), Ez=$(Ez[1])")
-println("Magnetic Field at particle position: Bx=$(Bx[1]), By=$(By[1]), Bz=$(Bz[1])") 
+println("Electric Field at particle position: Ex=$(Ex[1]), Ey=$(Ey[1]), Ez=$(Ez[1])") 

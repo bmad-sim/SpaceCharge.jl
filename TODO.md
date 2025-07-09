@@ -40,7 +40,7 @@ This TODO list tracks the implementation progress for SpaceCharge.jl based on th
 ### 2.2 Implement Field Interpolation
 - [x] Create `interpolation.jl` file
 - [x] Write `interpolate_kernel!` using `KernelAbstractions.jl`
-- [x] Implement trilinear interpolation for electric and magnetic fields
+- [x] Implement trilinear interpolation for electric fields
 - [x] Create main `interpolate_field` function for both CPU and GPU
 - [x] Test interpolation with known field distributions
 
@@ -67,7 +67,7 @@ This TODO list tracks the implementation progress for SpaceCharge.jl based on th
   - [x] Ex component calculation
   - [x] Ey component calculation
   - [x] Ez component calculation
-- [x] Implement B-field calculation from Ex and Ey
+
 - [x] Add proper grid extraction from padded results
 
 ### 3.3 Initial Testing (CPU)
@@ -94,7 +94,7 @@ This TODO list tracks the implementation progress for SpaceCharge.jl based on th
 - [x] Calculate offset vector for image charge distribution
 - [x] Implement image charge field calculation
 - [x] Add real and image fields with proper signs
-- [x] Handle B-field sign correction for image charges
+
 - [ ] Test cathode solver with known solutions
 
 ## Phase 5: Finalization and Documentation

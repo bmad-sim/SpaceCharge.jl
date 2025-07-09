@@ -18,10 +18,10 @@ mesh_gpu = Mesh3D(grid_size, particles_x_gpu, particles_y_gpu, particles_z_gpu; 
 # Deposit particle charges onto the grid (on GPU)
 deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
 
-# Solve for electric and magnetic fields (on GPU)
+# Solve for electric field (on GPU)
 solve!(mesh_gpu)
 
 # Interpolate fields back to particle positions (on GPU)
-Ex_gpu, Ey_gpu, Ez_gpu, Bx_gpu, By_gpu, Bz_gpu = interpolate_field(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu)
+Ex_gpu, Ey_gpu, Ez_gpu = interpolate_field(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu)
 
 println("GPU Electric Field at particle position: Ex=$(Ex_gpu[1]), Ey=$(Ey_gpu[1]), Ez=$(Ez_gpu[1])") 
