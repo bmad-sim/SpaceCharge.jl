@@ -21,7 +21,6 @@ deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
 solve!(mesh; at_cathode=true)
 
 # Interpolate fields back to particle position
-Ex, Ey, Ez, Bx, By, Bz = interpolate_field(mesh, particles_x, particles_y, particles_z)
+Ex, Ey, Ez = interpolate_field(mesh, particles_x, particles_y, particles_z)
 
-println("E-field at particle: Ex=$(Ex[1]), Ey=$(Ey[1]), Ez=$(Ez[1])")
-println("B-field at particle: Bx=$(Bx[1]), By=$(By[1]), Bz=$(Bz[1])") 
+println("E-field at particle: Ex=$(Ex[1]), Ey=$(Ey[1]), Ez=$(Ez[1])") 

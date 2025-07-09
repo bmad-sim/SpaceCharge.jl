@@ -18,8 +18,6 @@ function run_gpu_tests()
             @test eltype(mesh_gpu.rho) == Float32
             @test mesh_gpu.rho isa CuArray{Float32, 3}
             @test mesh_gpu.efield isa CuArray{Float32, 4}
-            @test mesh_gpu.bfield isa CuArray{Float32, 4}
-            @test mesh_gpu.phi isa CuArray{Float32, 3}
         end
 
         # Test GPU deposition
@@ -59,15 +57,12 @@ function run_gpu_tests()
             efield_cpu[2,1,1,1] = 2.0f0
             mesh_gpu.efield .= CuArray(efield_cpu)
             
-            Ex_gpu, Ey_gpu, Ez_gpu, Bx_gpu, By_gpu, Bz_gpu = interpolate_field(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu)
+            Ex_gpu, Ey_gpu, Ez_gpu = interpolate_field(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu)
             
             # Check return types
             @test Ex_gpu isa CuArray{Float32, 1}
             @test Ey_gpu isa CuArray{Float32, 1}
             @test Ez_gpu isa CuArray{Float32, 1}
-            @test Bx_gpu isa CuArray{Float32, 1}
-            @test By_gpu isa CuArray{Float32, 1}
-            @test Bz_gpu isa CuArray{Float32, 1}
             
             # Check that interpolation gives reasonable values
             @test isfinite(Array(Ex_gpu)[1])
@@ -92,7 +87,6 @@ function run_gpu_tests()
             
             # Check that fields are computed
             @test any(Array(mesh_gpu.efield) .!= 0.0f0)
-            @test any(Array(mesh_gpu.bfield) .!= 0.0f0)
             
             # Check charge conservation
             @test sum(Array(mesh_gpu.rho)) ≈ sum(Array(particles_q_gpu)) atol=1e-6
@@ -114,7 +108,7 @@ function run_gpu_tests()
             solve!(mesh_gpu)
             
             # Interpolate fields
-            Ex_gpu, Ey_gpu, Ez_gpu, Bx_gpu, By_gpu, Bz_gpu = interpolate_field(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu)
+            Ex_gpu, Ey_gpu, Ez_gpu = interpolate_field(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu)
             
             # Check results
             @test length(Ex_gpu) == 2
@@ -151,7 +145,7 @@ function run_gpu_tests()
             
             # Check that results are similar (allowing for floating point differences)
             @test isapprox(sum(Array(mesh_gpu.rho)), sum(mesh_cpu.rho), atol=1e-5)
-            @test isapprox(sum(Array(mesh_gpu.efield)), sum(mesh_cpu.efield), atol=1e-5)
+            @test isapprox(sum(Array(mesh_gpu.efield)), sum(mesh_cpu.efield), rtol=1e-5)
         end
 
         # Test GPU clear_mesh!

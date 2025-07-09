@@ -98,11 +98,11 @@ Interpolate the electric field from the grid to particle positions.
 - A tuple containing three 1D arrays: `(Ex, Ey, Ez)`.
 """
 function interpolate_field(
-    mesh::Mesh3D,
+    mesh::Mesh3D{T, A, B},
     particles_x,
     particles_y,
     particles_z,
-)
+) where {T, A, B}
     backend = get_backend(mesh.rho)
     kernel! = interpolate_kernel!(backend)
 

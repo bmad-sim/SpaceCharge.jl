@@ -18,8 +18,6 @@ function run_mesh_tests()
             @test typeof(mesh.rho) == Array{Float64, 3}
             @test size(mesh.rho) == grid_size
             @test size(mesh.efield) == (grid_size..., 3)
-            @test size(mesh.bfield) == (grid_size..., 3)
-            @test size(mesh.phi) == grid_size
             
             # Check that bounds contain all particles with padding
             @test mesh.min_bounds[1] < minimum(particles_x)

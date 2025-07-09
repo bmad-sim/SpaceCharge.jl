@@ -2,7 +2,7 @@ using Adapt
 using AbstractFFTs
 
 """
-    Mesh3D{T, A}
+    Mesh3D{T, A, B}
 
 A struct to represent a 3D Cartesian mesh.
 
@@ -14,11 +14,10 @@ A struct to represent a 3D Cartesian mesh.
 - `gamma::T`:                    Lorentz factor for relativistic calculations.
 - `total_charge::T`:             Total charge in the system.
 - `rho::A`:                      Charge density array.
-- `phi::A`:                      Electric potential array.
-- `efield::AbstractArray{T, 4}`: Electric field array with the last dimension for components (x, y, z).
+- `efield::B`:                   Electric field array with the last dimension for components (x, y, z).
 - `_workspace::Union{Nothing, NamedTuple}`: Internal workspace for solver optimization (pre-allocated arrays and FFT plans).
 """
-mutable struct Mesh3D{T <: AbstractFloat, A <: AbstractArray{T}}
+mutable struct Mesh3D{T <: AbstractFloat, A <: AbstractArray{T}, B <: AbstractArray{T}}
     # Grid dimensions
     grid_size::NTuple{3, Int}
     # Physical domain
@@ -30,14 +29,13 @@ mutable struct Mesh3D{T <: AbstractFloat, A <: AbstractArray{T}}
     total_charge::T
     # Data arrays (CPU or GPU)
     rho::A
-    phi::A
-    efield::AbstractArray{T, 4} # Last dimension for component (x,y,z)
+    efield::B
     # Optimization workspace (lazy initialization)
     _workspace::Union{Nothing, NamedTuple}
 end
 
 """
-    _get_workspace(mesh::Mesh3D{T, A}) where {T<:AbstractFloat, A<:AbstractArray}
+    _get_workspace(mesh::Mesh3D{T, A, B}) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
 
 Get or create the workspace for the mesh. This includes pre-allocated arrays 
 and cached in-place FFT plans for maximum performance of the free space solver.
@@ -49,7 +47,7 @@ The workspace contains:
 - `fft_plan_inplace`: Cached in-place forward FFT plan
 - `ifft_plan_inplace`: Cached in-place inverse FFT plan
 """
-function _get_workspace(mesh::Mesh3D{T, A}) where {T<:AbstractFloat, A<:AbstractArray}
+function _get_workspace(mesh::Mesh3D{T, A, B}) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
     if mesh._workspace === nothing
         nx, ny, nz = mesh.grid_size
         nx2, ny2, nz2 = 2nx, 2ny, 2nz
@@ -157,17 +155,16 @@ function Mesh3D(
     # --- Array Allocation ---
     # Create arrays on the CPU first
     rho_cpu = zeros(T, grid_size)
-    phi_cpu = zeros(T, grid_size)
     efield_cpu = zeros(T, (grid_size..., 3))
 
     # Move arrays to the target device (e.g., GPU)
     rho = adapt(array_type, rho_cpu)
-    phi = adapt(array_type, phi_cpu)
     efield = adapt(array_type, efield_cpu)
 
     # --- Struct Instantiation ---
     A = typeof(rho) # Get the concrete array type
-    return Mesh3D{T, A}(
+    B = typeof(efield)
+    return Mesh3D{T, A, B}(
         grid_size,
         cv_min_bounds,
         cv_max_bounds,
@@ -175,7 +172,6 @@ function Mesh3D(
         cv_gamma,
         cv_total_charge,
         rho,
-        phi,
         efield,
         nothing,
     )
@@ -230,17 +226,16 @@ function Mesh3D(
     # --- Array Allocation ---
     # Create arrays on the CPU first
     rho_cpu = zeros(T, grid_size)
-    phi_cpu = zeros(T, grid_size)
     efield_cpu = zeros(T, (grid_size..., 3))
 
     # Move arrays to the target device (e.g., GPU)
     rho = adapt(array_type, rho_cpu)
-    phi = adapt(array_type, phi_cpu)
     efield = adapt(array_type, efield_cpu)
 
     # --- Struct Instantiation ---
     A = typeof(rho) # Get the concrete array type
-    return Mesh3D{T, A}(
+    B = typeof(efield)
+    return Mesh3D{T, A, B}(
         grid_size,
         cv_min_bounds,
         cv_max_bounds,
@@ -248,7 +243,6 @@ function Mesh3D(
         cv_gamma,
         cv_total_charge,
         rho,
-        phi,
         efield,
         nothing,
     )

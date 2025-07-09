@@ -13,7 +13,8 @@ Solves the space charge problem for free-space boundary conditions.
 """
 function solve!(mesh::Mesh3D; at_cathode::Bool = false)
     # Real charge field
-    solve_freespace!(mesh, offset = (0.0, 0.0, 0.0))
+    T = eltype(mesh.rho)
+    solve_freespace!(mesh, offset = (zero(T), zero(T), zero(T)))
 
     if at_cathode
         # Image charge field
@@ -23,7 +24,7 @@ function solve!(mesh::Mesh3D; at_cathode::Bool = false)
         # Image charge offset for cathode at z=0: 
         # Real charge at z, image charge at -z, distance = 2z
         offset_z = 2 * mesh.min_bounds[3] + (mesh.max_bounds[3] - mesh.min_bounds[3])
-        offset = (0.0, 0.0, offset_z)
+        offset = (zero(T), zero(T), offset_z)
 
         solve_freespace!(image_mesh, offset = offset)
 
@@ -33,13 +34,13 @@ function solve!(mesh::Mesh3D; at_cathode::Bool = false)
 end
 
 """
-    solve_freespace!(mesh::Mesh3D{T, A}; offset::NTuple{3, T} = (0.0, 0.0, 0.0)) where {T<:AbstractFloat, A<:AbstractArray}
+    solve_freespace!(mesh::Mesh3D{T, A, B}; offset::NTuple{3, T} = (zero(T), zero(T), zero(T))) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
 
 Optimized free-space solver for computing electric and magnetic fields from charge density.
 Uses pre-allocated workspace arrays, cached in-place FFT plans, and CPU multi-threading for 
 optimal performance on both CPU and GPU.
 """
-function solve_freespace!(mesh::Mesh3D{T, A}; offset::NTuple{3, T} = (0.0, 0.0, 0.0)) where {T<:AbstractFloat, A<:AbstractArray}
+function solve_freespace!(mesh::Mesh3D{T, A, B}; offset::NTuple{3, T} = (zero(T), zero(T), zero(T))) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
     nx, ny, nz = mesh.grid_size
 
     # Set FFTW to use all available threads for optimal CPU performance
@@ -63,8 +64,7 @@ function solve_freespace!(mesh::Mesh3D{T, A}; offset::NTuple{3, T} = (0.0, 0.0, 
     # Normalization factor: 1/(4 pi eps0)
     factr = (299792458.0^2 * 1.00000000055e-7)
 
-    # Loop over phi, Ex, Ey, Ez with optimized operations
-    for icomp = 0:3
+    for icomp = 1:3
         # Get Green's function (reuse cgrn array)
         get_green_function!(
             cgrn,
@@ -83,12 +83,8 @@ function solve_freespace!(mesh::Mesh3D{T, A}; offset::NTuple{3, T} = (0.0, 0.0, 
         # In-place inverse FFT
         ifft_plan_inplace * temp_result
 
-        # Extract field/potential using optimized slicing
+        # Extract field using optimized slicing
         ishift, jshift, kshift = nx - 1, ny - 1, nz - 1
-        if icomp == 0
-            @views @. mesh.phi = factr * real(temp_result[1+ishift:nx+ishift, 1+jshift:ny+jshift, 1+kshift:nz+kshift])
-        else
-            @views @. mesh.efield[:, :, :, icomp] = factr * real(temp_result[1+ishift:nx+ishift, 1+jshift:ny+jshift, 1+kshift:nz+kshift])
-        end
+        @views @. mesh.efield[:, :, :, icomp] = factr * real(temp_result[1+ishift:nx+ishift, 1+jshift:ny+jshift, 1+kshift:nz+kshift])
     end
 end
