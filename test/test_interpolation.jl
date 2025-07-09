@@ -20,7 +20,7 @@ function run_interpolation_tests()
             mesh.efield[1,1,2,1] = 4.0  # Ex at (0,0,1)
             
             # Interpolate at the particle position
-            Ex, Ey, Ez, Bx, By, Bz = interpolate_field(mesh, particles_x, particles_y, particles_z)
+            Ex, Ey, Ez = interpolate_field(mesh, particles_x, particles_y, particles_z)
             
             # Check that we get a reasonable interpolated value
             # For a particle at (0.5, 0.5, 0.5), we expect some weighted average
@@ -30,9 +30,6 @@ function run_interpolation_tests()
             # Remove the exact comparison since we're now just checking finiteness
             @test Ey[1] ≈ 0.0 atol=1e-10  # Should be zero as we didn't set Ey values
             @test Ez[1] ≈ 0.0 atol=1e-10  # Should be zero as we didn't set Ez values
-            @test Bx[1] ≈ 0.0 atol=1e-10  # Should be zero as we didn't set Bx values
-            @test By[1] ≈ 0.0 atol=1e-10  # Should be zero as we didn't set By values
-            @test Bz[1] ≈ 0.0 atol=1e-10  # Should be zero as we didn't set Bz values
         end
 
         # Test interpolation with multiple particles
@@ -52,7 +49,7 @@ function run_interpolation_tests()
                 mesh.efield[i,j,k,3] = k * 0.1  # Linear gradient in z
             end
             
-            Ex, Ey, Ez, Bx, By, Bz = interpolate_field(mesh, particles_x, particles_y, particles_z)
+            Ex, Ey, Ez = interpolate_field(mesh, particles_x, particles_y, particles_z)
             
             # Check that we get different values for different particles
             @test length(Ex) == 2
@@ -79,7 +76,7 @@ function run_interpolation_tests()
             mesh.efield[1,1,1,1] = 1.0  # Ex at (0,0,0)
             mesh.efield[2,1,1,1] = 2.0  # Ex at (1,0,0)
             
-            Ex, Ey, Ez, Bx, By, Bz = interpolate_field(mesh, particles_x, particles_y, particles_z)
+            Ex, Ey, Ez = interpolate_field(mesh, particles_x, particles_y, particles_z)
             
             # At grid points, interpolation should give reasonable values
             @test isfinite(Ex[1])  # First particle at (0,0,0)
@@ -101,15 +98,12 @@ function run_interpolation_tests()
             solve!(mesh)
             
             # Interpolate fields back to particle positions
-            Ex, Ey, Ez, Bx, By, Bz = interpolate_field(mesh, particles_x, particles_y, particles_z)
+            Ex, Ey, Ez = interpolate_field(mesh, particles_x, particles_y, particles_z)
             
             # Check that interpolated fields are finite
             @test all(isfinite.(Ex))
             @test all(isfinite.(Ey))
             @test all(isfinite.(Ez))
-            @test all(isfinite.(Bx))
-            @test all(isfinite.(By))
-            @test all(isfinite.(Bz))
             
             # For a central charge, fields at the center should be large
             @test abs(Ex[1]) > 1e7
@@ -130,7 +124,7 @@ function run_interpolation_tests()
             # Set constant field
             mesh.efield .= 1.0
             
-            Ex, Ey, Ez, Bx, By, Bz = interpolate_field(mesh, particles_x, particles_y, particles_z)
+            Ex, Ey, Ez = interpolate_field(mesh, particles_x, particles_y, particles_z)
             
             # Should get constant field values
             @test all(Ex .≈ 1.0)

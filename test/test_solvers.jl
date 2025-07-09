@@ -24,11 +24,9 @@ function run_solver_tests()
             
             # Check that fields are computed
             @test any(mesh.efield .!= 0.0)
-            @test any(mesh.bfield .!= 0.0)
             
             # Check that fields are finite (avoiding NaN issues)
             @test all(isfinite.(mesh.efield))
-            @test all(isfinite.(mesh.bfield))
         end
 
         # Test FreeSpace Solver with cathode
@@ -51,12 +49,10 @@ function run_solver_tests()
             
             # Fields should be different with cathode
             @test !isapprox(mesh.efield, mesh_free_space.efield)
-            @test !isapprox(mesh.bfield, mesh_free_space.bfield)
             
             # Check that fields are computed and finite
             @test any(mesh.efield .!= 0.0)
             @test all(isfinite.(mesh.efield))
-            @test all(isfinite.(mesh.bfield))
         end
 
         # Test solver with different gamma values
@@ -79,7 +75,6 @@ function run_solver_tests()
             
             # Fields should be different for different gamma values
             @test !isapprox(mesh1.efield, mesh2.efield)
-            @test !isapprox(mesh1.bfield, mesh2.bfield)
         end
     end
 end 

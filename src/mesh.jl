@@ -16,7 +16,6 @@ A struct to represent a 3D Cartesian mesh.
 - `rho::A`:                      Charge density array.
 - `phi::A`:                      Electric potential array.
 - `efield::AbstractArray{T, 4}`: Electric field array with the last dimension for components (x, y, z).
-- `bfield::AbstractArray{T, 4}`: Magnetic field array with the last dimension for components (x, y, z).
 - `_workspace::Union{Nothing, NamedTuple}`: Internal workspace for solver optimization (pre-allocated arrays and FFT plans).
 """
 mutable struct Mesh3D{T <: AbstractFloat, A <: AbstractArray{T}}
@@ -33,7 +32,6 @@ mutable struct Mesh3D{T <: AbstractFloat, A <: AbstractArray{T}}
     rho::A
     phi::A
     efield::AbstractArray{T, 4} # Last dimension for component (x,y,z)
-    bfield::AbstractArray{T, 4}
     # Optimization workspace (lazy initialization)
     _workspace::Union{Nothing, NamedTuple}
 end
@@ -161,13 +159,11 @@ function Mesh3D(
     rho_cpu = zeros(T, grid_size)
     phi_cpu = zeros(T, grid_size)
     efield_cpu = zeros(T, (grid_size..., 3))
-    bfield_cpu = zeros(T, (grid_size..., 3))
 
     # Move arrays to the target device (e.g., GPU)
     rho = adapt(array_type, rho_cpu)
     phi = adapt(array_type, phi_cpu)
     efield = adapt(array_type, efield_cpu)
-    bfield = adapt(array_type, bfield_cpu)
 
     # --- Struct Instantiation ---
     A = typeof(rho) # Get the concrete array type
@@ -181,7 +177,6 @@ function Mesh3D(
         rho,
         phi,
         efield,
-        bfield,
         nothing,
     )
 end
@@ -237,13 +232,11 @@ function Mesh3D(
     rho_cpu = zeros(T, grid_size)
     phi_cpu = zeros(T, grid_size)
     efield_cpu = zeros(T, (grid_size..., 3))
-    bfield_cpu = zeros(T, (grid_size..., 3))
 
     # Move arrays to the target device (e.g., GPU)
     rho = adapt(array_type, rho_cpu)
     phi = adapt(array_type, phi_cpu)
     efield = adapt(array_type, efield_cpu)
-    bfield = adapt(array_type, bfield_cpu)
 
     # --- Struct Instantiation ---
     A = typeof(rho) # Get the concrete array type
@@ -257,7 +250,6 @@ function Mesh3D(
         rho,
         phi,
         efield,
-        bfield,
         nothing,
     )
 end

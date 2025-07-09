@@ -1,17 +1,15 @@
 using KernelAbstractions
 
 """
-    interpolate_kernel!(Ex, Ey, Ez, Bx, By, Bz, efield, bfield, particles_x, particles_y, particles_z, min_bounds, delta)
+    interpolate_kernel!(Ex, Ey, Ez, efield, particles_x, particles_y, particles_z, min_bounds, delta)
 
-A kernel for interpolating the electric and magnetic fields from the grid to particle positions.
+A kernel for interpolating the electric field from the grid to particle positions.
 
 This kernel is designed to be run on either a CPU or a GPU using `KernelAbstractions.jl`.
 
 # Arguments
 - `Ex`, `Ey`, `Ez`: 1D arrays to store the interpolated electric field components.
-- `Bx`, `By`, `Bz`: 1D arrays to store the interpolated magnetic field components.
 - `efield`: A 4D array representing the electric field on the grid.
-- `bfield`: A 4D array representing the magnetic field on the grid.
 - `particles_x`, `particles_y`, `particles_z`: 1D arrays of particle coordinates.
 - `min_bounds`: A tuple or vector containing the minimum coordinates of the grid boundaries.
 - `delta`: A tuple or vector containing the grid spacing in each dimension.
@@ -20,11 +18,7 @@ This kernel is designed to be run on either a CPU or a GPU using `KernelAbstract
     Ex,
     Ey,
     Ez,
-    Bx,
-    By,
-    Bz,
     efield,
-    bfield,
     particles_x,
     particles_y,
     particles_z,
@@ -89,50 +83,19 @@ This kernel is designed to be run on either a CPU or a GPU using `KernelAbstract
         efield[ix + 1, iy + 2, iz + 2, 3] * w_011 +
         efield[ix + 2, iy + 2, iz + 2, 3] * w_111
     )
-
-    Bx[i] = (
-        bfield[ix + 1, iy + 1, iz + 1, 1] * w_000 +
-        bfield[ix + 2, iy + 1, iz + 1, 1] * w_100 +
-        bfield[ix + 1, iy + 2, iz + 1, 1] * w_010 +
-        bfield[ix + 2, iy + 2, iz + 1, 1] * w_110 +
-        bfield[ix + 1, iy + 1, iz + 2, 1] * w_001 +
-        bfield[ix + 2, iy + 1, iz + 2, 1] * w_101 +
-        bfield[ix + 1, iy + 2, iz + 2, 1] * w_011 +
-        bfield[ix + 2, iy + 2, iz + 2, 1] * w_111
-    )
-    By[i] = (
-        bfield[ix + 1, iy + 1, iz + 1, 2] * w_000 +
-        bfield[ix + 2, iy + 1, iz + 1, 2] * w_100 +
-        bfield[ix + 1, iy + 2, iz + 1, 2] * w_010 +
-        bfield[ix + 2, iy + 2, iz + 1, 2] * w_110 +
-        bfield[ix + 1, iy + 1, iz + 2, 2] * w_001 +
-        bfield[ix + 2, iy + 1, iz + 2, 2] * w_101 +
-        bfield[ix + 1, iy + 2, iz + 2, 2] * w_011 +
-        bfield[ix + 2, iy + 2, iz + 2, 2] * w_111
-    )
-    Bz[i] = (
-        bfield[ix + 1, iy + 1, iz + 1, 3] * w_000 +
-        bfield[ix + 2, iy + 1, iz + 1, 3] * w_100 +
-        bfield[ix + 1, iy + 2, iz + 1, 3] * w_010 +
-        bfield[ix + 2, iy + 2, iz + 1, 3] * w_110 +
-        bfield[ix + 1, iy + 1, iz + 2, 3] * w_001 +
-        bfield[ix + 2, iy + 1, iz + 2, 3] * w_101 +
-        bfield[ix + 1, iy + 2, iz + 2, 3] * w_011 +
-        bfield[ix + 2, iy + 2, iz + 2, 3] * w_111
-    )
 end
 
 """
     interpolate_field(mesh, particles_x, particles_y, particles_z)
 
-Interpolate the electric and magnetic fields from the grid to particle positions.
+Interpolate the electric field from the grid to particle positions.
 
 # Arguments
 - `mesh`: A `Mesh3D` object.
 - `particles_x`, `particles_y`, `particles_z`: 1D arrays of particle coordinates.
 
 # Returns
-- A tuple containing six 1D arrays: `(Ex, Ey, Ez, Bx, By, Bz)`.
+- A tuple containing three 1D arrays: `(Ex, Ey, Ez)`.
 """
 function interpolate_field(
     mesh::Mesh3D,
@@ -147,19 +110,12 @@ function interpolate_field(
     Ex = similar(particles_x)
     Ey = similar(particles_x)
     Ez = similar(particles_x)
-    Bx = similar(particles_x)
-    By = similar(particles_x)
-    Bz = similar(particles_x)
 
     kernel!(
         Ex,
         Ey,
         Ez,
-        Bx,
-        By,
-        Bz,
         mesh.efield,
-        mesh.bfield,
         particles_x,
         particles_y,
         particles_z,
@@ -168,5 +124,5 @@ function interpolate_field(
         ndrange=num_particles,
     )
 
-    return Ex, Ey, Ez, Bx, By, Bz
+    return Ex, Ey, Ez
 end

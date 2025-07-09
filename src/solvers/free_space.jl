@@ -29,12 +29,6 @@ function solve!(mesh::Mesh3D; at_cathode::Bool = false)
 
         # Superposition of fields
         mesh.efield .+= image_mesh.efield
-
-        # B-field from image charges has opposite sign
-        beta = sqrt(1 - 1 / mesh.gamma^2)
-        clight = 299792458.0
-        mesh.bfield[:, :, :, 1] .-= (beta / clight) * image_mesh.efield[:, :, :, 2]
-        mesh.bfield[:, :, :, 2] .+= (beta / clight) * image_mesh.efield[:, :, :, 1]
     end
 end
 
@@ -97,11 +91,4 @@ function solve_freespace!(mesh::Mesh3D{T, A}; offset::NTuple{3, T} = (0.0, 0.0, 
             @views @. mesh.efield[:, :, :, icomp] = factr * real(temp_result[1+ishift:nx+ishift, 1+jshift:ny+jshift, 1+kshift:nz+kshift])
         end
     end
-
-    # Calculate B-field with vectorized operations
-    beta = sqrt(1 - 1 / mesh.gamma^2)
-    clight = 299792458.0
-    @. mesh.bfield[:, :, :, 1] = -(beta / clight) * mesh.efield[:, :, :, 2]
-    @. mesh.bfield[:, :, :, 2] = (beta / clight) * mesh.efield[:, :, :, 1]
-    fill!(view(mesh.bfield, :, :, :, 3), 0.0)
 end
