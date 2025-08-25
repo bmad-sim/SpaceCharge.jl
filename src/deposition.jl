@@ -226,6 +226,7 @@ function deposit!(
 )
     if clear
         clear_mesh!(mesh)
+        update_bounds!(mesh, particles_x, particles_y, particles_z)
     end
     
     backend = get_backend(mesh.rho)
