@@ -1,6 +1,6 @@
 name = "SpaceCharge"
 uuid = "886cafed-6ce3-46b8-9147-fe45a2210a4b"
-authors = ["Eiad Hamwi <eh652@cornell.edu>, Ningdong Wang <ndwang3@gmail.com>, Tianyu Huang <thuang23@u.rochester.edu>"]
+authors = [Ningdong Wang <ndwang3@gmail.com>, "Eiad Hamwi <eh652@cornell.edu>, Tianyu Huang <thuang23@u.rochester.edu>"]
 version = "1.1.0"
 
 [deps]
