@@ -12,8 +12,8 @@ This corresponds to the scalar potential.
 """
 @inline function potential_green_function(x, y, z)
     r = sqrt(x^2 + y^2 + z^2)
-    if r == 0.0
-        return 0.0
+    if r == zero(x)
+        return zero(x)
     end
     return -0.5 * z^2 * atan(x * y / (z * r)) - 0.5 * y^2 * atan(x * z / (y * r)) -
            0.5 * x^2 * atan(y * z / (x * r)) + y * z * log(x + r) +
@@ -66,7 +66,7 @@ end
     factor = if (icomp == 1) || (icomp == 2)
         gamma / (dx * dy * dz)  # transverse fields are enhanced by gamma
     else
-        1.0 / (dx * dy * dz)
+        one(dx) / (dx * dy * dz)
     end
 
     umin = (0.5 - isize / 2) * dx + offset[1]
@@ -84,10 +84,10 @@ end
     elseif icomp == 3
         field_green_function(w, u, v) * factor
     else
-        0.0
+        zero(dx)
     end
 
-    cgrn[i, j, k] = complex(gval, 0.0)
+    cgrn[i, j, k] = Complex{typeof(gval)}(gval, zero(gval))
 end
 
 @kernel function apply_8point_differencing!(cgrn)

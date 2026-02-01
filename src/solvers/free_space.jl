@@ -52,14 +52,14 @@ function solve_freespace!(mesh::Mesh3D{T, A, B}; offset::NTuple{3, T} = (zero(T)
     ifft_plan_inplace = workspace.ifft_plan_inplace
 
     # Clear and setup charge density array
-    fill!(crho, 0.0)
+    fill!(crho, zero(eltype(crho)))
     crho[1:nx, 1:ny, 1:nz] .= mesh.rho
 
     # In-place FFT of charge density
     fft_plan_inplace * crho
 
     # Normalization factor: 1/(4 pi eps0)
-    factr = FPEI
+    factr = T(FPEI)
 
     for icomp = 1:3
         # Get Green's function (reuse cgrn array)
