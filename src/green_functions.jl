@@ -1,5 +1,4 @@
 using KernelAbstractions
-using StaticArrays
 
 """
     potential_green_function(x, y, z)

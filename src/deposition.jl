@@ -1,5 +1,4 @@
 using KernelAbstractions
-using StaticArrays
 using Atomix
 
 """
