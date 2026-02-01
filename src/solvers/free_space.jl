@@ -17,11 +17,24 @@ function solve!(mesh::Mesh3D; at_cathode::Bool = false)
     solve_freespace!(mesh, offset = (zero(T), zero(T), zero(T)))
 
     if at_cathode
-        # Image charge field
-        image_mesh = deepcopy(mesh)
-        image_mesh.rho .= -image_mesh.rho[:, :, end:-1:1]
+        # Image charge field — create a lightweight mesh instead of deepcopy
+        # to avoid copying workspace arrays and FFT plans
+        AT = typeof(mesh.rho)
+        BT = typeof(mesh.efield)
+        image_mesh = Mesh3D{T, AT, BT}(
+            mesh.grid_size,
+            mesh.min_bounds,
+            mesh.max_bounds,
+            mesh.delta,
+            mesh.gamma,
+            mesh.total_charge,
+            similar(mesh.rho),
+            similar(mesh.efield),
+            nothing,
+        )
+        image_mesh.rho .= -mesh.rho[:, :, end:-1:1]
 
-        # Image charge offset for cathode at z=0: 
+        # Image charge offset for cathode at z=0:
         # Real charge at z, image charge at -z, distance = 2z
         offset_z = 2 * mesh.min_bounds[3] + (mesh.max_bounds[3] - mesh.min_bounds[3])
         offset = (zero(T), zero(T), offset_z)
