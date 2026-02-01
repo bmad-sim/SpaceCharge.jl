@@ -43,9 +43,6 @@ optimal performance on both CPU and GPU.
 function solve_freespace!(mesh::Mesh3D{T, A, B}; offset::NTuple{3, T} = (zero(T), zero(T), zero(T))) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
     nx, ny, nz = mesh.grid_size
 
-    # Set FFTW to use all available threads for optimal CPU performance
-    FFTW.set_num_threads(Threads.nthreads())
-
     # Get pre-allocated workspace (lazy initialization)
     workspace = _get_workspace(mesh)
     crho = workspace.crho
