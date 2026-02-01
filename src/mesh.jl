@@ -247,3 +247,11 @@ function Mesh3D(
         nothing,
     )
 end
+
+function Base.show(io::IO, mesh::Mesh3D{T}) where {T}
+    nx, ny, nz = mesh.grid_size
+    lo = mesh.min_bounds
+    hi = mesh.max_bounds
+    arr_type = nameof(typeof(mesh.rho).name.wrapper)
+    print(io, "Mesh3D{$T, $arr_type} ($(nx)x$(ny)x$(nz)) bounds=[($(lo[1]),$(lo[2]),$(lo[3])), ($(hi[1]),$(hi[2]),$(hi[3]))] gamma=$(mesh.gamma)")
+end
