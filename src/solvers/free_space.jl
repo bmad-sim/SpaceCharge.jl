@@ -75,13 +75,14 @@ function solve_freespace!(mesh::Mesh3D{T, A, B}; offset::NTuple{3, T} = (zero(T)
     factr = T(FPEI)
 
     for icomp = 1:3
-        # Get Green's function (reuse cgrn array)
+        # Get Green's function (reuse cgrn array, temp_result as scratch for differencing)
         get_green_function!(
             cgrn,
             mesh.delta,
             mesh.gamma,
             icomp,
             offset = offset,
+            temp = temp_result,
         )
 
         # In-place FFT of Green's function

@@ -70,7 +70,8 @@ function get_green_function!(
     delta::NTuple{3, T},
     gamma::T,
     icomp::Int;
-    offset::NTuple{3, T} = (zero(T), zero(T), zero(T))
+    offset::NTuple{3, T} = (zero(T), zero(T), zero(T)),
+    temp::Union{Nothing, A} = nothing
 ) where {T<:AbstractFloat, A<:AbstractArray}
     isize, jsize, ksize = size(cgrn)
 
@@ -80,10 +81,16 @@ function get_green_function!(
     kernel!(cgrn, delta, gamma, icomp, offset, ndrange = size(cgrn))
 
     # Apply 8-point differencing to compute integrated Green's function
-    # Use optimized kernel to avoid memory allocations
+    # Use a temporary array to avoid read-write race condition
+    diff_temp = temp === nothing ? similar(cgrn) : temp
     backend = get_backend(cgrn)
     differencing_kernel! = apply_8point_differencing!(backend)
-    differencing_kernel!(cgrn, ndrange = (isize-1, jsize-1, ksize-1))
+    differencing_kernel!(diff_temp, cgrn, ndrange = (isize-1, jsize-1, ksize-1))
+
+    # Copy differenced values back to cgrn
+    cgrn_view = @view cgrn[1:isize-1, 1:jsize-1, 1:ksize-1]
+    temp_view = @view diff_temp[1:isize-1, 1:jsize-1, 1:ksize-1]
+    cgrn_view .= temp_view
 end
 
 @kernel function get_green_kernel!(cgrn, delta, gamma, icomp, offset)
@@ -120,13 +127,13 @@ end
     cgrn[i, j, k] = Complex{typeof(gval)}(gval, zero(gval))
 end
 
-@kernel function apply_8point_differencing!(cgrn)
+@kernel function apply_8point_differencing!(out, cgrn)
     i, j, k = @index(Global, NTuple)
-    
-    # Compute 8-point finite difference stencil in-place
-    # This avoids all temporary array allocations
-    cgrn[i, j, k] = cgrn[i+1, j+1, k+1] - cgrn[i, j+1, k+1] - 
-                    cgrn[i+1, j, k+1] - cgrn[i+1, j+1, k] - 
-                    cgrn[i, j, k] + cgrn[i, j, k+1] + 
-                    cgrn[i, j+1, k] + cgrn[i+1, j, k]
+
+    # Compute 8-point finite difference stencil
+    # Writes to separate output array to avoid read-write race condition
+    out[i, j, k] = cgrn[i+1, j+1, k+1] - cgrn[i, j+1, k+1] -
+                   cgrn[i+1, j, k+1] - cgrn[i+1, j+1, k] -
+                   cgrn[i, j, k] + cgrn[i, j, k+1] +
+                   cgrn[i, j+1, k] + cgrn[i+1, j, k]
 end
