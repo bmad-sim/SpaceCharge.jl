@@ -223,6 +223,10 @@ function deposit!(
     particles_q;
     clear::Bool=true
 )
+    if !(length(particles_x) == length(particles_y) == length(particles_z) == length(particles_q))
+        error("Particle coordinate and charge arrays must have the same length.")
+    end
+
     if clear
         clear_mesh!(mesh)
     end

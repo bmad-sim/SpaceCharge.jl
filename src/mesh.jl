@@ -104,12 +104,16 @@ function Mesh3D(
     total_charge::Real=0.0
 )
     # --- Validation ---
-    if any(grid_size .<= 0)
-        error("All elements of grid_size must be positive.")
+    if any(grid_size .<= 1)
+        error("All elements of grid_size must be at least 2.")
     end
-    
+
     if isempty(particles_x) || isempty(particles_y) || isempty(particles_z)
         error("Particle arrays cannot be empty.")
+    end
+
+    if !(length(particles_x) == length(particles_y) == length(particles_z))
+        error("Particle coordinate arrays must have the same length.")
     end
 
     # --- Automatic Bounds Calculation ---
@@ -207,8 +211,8 @@ function Mesh3D(
     total_charge::Real=0.0
 )
     # --- Validation ---
-    if any(grid_size .<= 0)
-        error("All elements of grid_size must be positive.")
+    if any(grid_size .<= 1)
+        error("All elements of grid_size must be at least 2.")
     end
     if any(max_bounds .<= min_bounds)
         error("max_bounds must be strictly greater than min_bounds for all dimensions.")

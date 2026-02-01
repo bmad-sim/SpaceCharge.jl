@@ -74,17 +74,23 @@ function run_mesh_tests()
 
         # Test validation
         @testset "Validation" begin
-            # Invalid grid size
-            @test_throws ErrorException Mesh3D((0, 1, 1), [0.0], [0.0], [0.0])
-            @test_throws ErrorException Mesh3D((1, 0, 1), [0.0], [0.0], [0.0])
-            @test_throws ErrorException Mesh3D((1, 1, 0), [0.0], [0.0], [0.0])
-            
+            # Invalid grid size (must be at least 2 in each dimension)
+            @test_throws ErrorException Mesh3D((0, 2, 2), [0.0], [0.0], [0.0])
+            @test_throws ErrorException Mesh3D((2, 0, 2), [0.0], [0.0], [0.0])
+            @test_throws ErrorException Mesh3D((2, 2, 0), [0.0], [0.0], [0.0])
+            @test_throws ErrorException Mesh3D((1, 2, 2), [0.0], [0.0], [0.0])
+            @test_throws ErrorException Mesh3D((2, 1, 2), [0.0], [0.0], [0.0])
+            @test_throws ErrorException Mesh3D((2, 2, 1), [0.0], [0.0], [0.0])
+
             # Empty particle arrays
-            @test_throws ErrorException Mesh3D((1, 1, 1), Float64[], Float64[], Float64[])
-            
+            @test_throws ErrorException Mesh3D((2, 2, 2), Float64[], Float64[], Float64[])
+
+            # Mismatched particle array lengths
+            @test_throws ErrorException Mesh3D((4, 4, 4), [0.0, 1.0], [0.0], [0.0])
+
             # Invalid bounds (for manual constructor)
-            @test_throws ErrorException Mesh3D((1, 1, 1), (0,0,0), (0,0,0))
-            @test_throws ErrorException Mesh3D((1, 1, 1), (1,1,1), (0,0,0))
+            @test_throws ErrorException Mesh3D((2, 2, 2), (0,0,0), (0,0,0))
+            @test_throws ErrorException Mesh3D((2, 2, 2), (1,1,1), (0,0,0))
         end
 
         # Test physics parameters
