@@ -31,7 +31,37 @@ Other components can be computed by permuting the arguments.
 """
 @inline function field_green_function(x, y, z)
     r = sqrt(x^2 + y^2 + z^2)
-    return x * atan((y * z) / (r * x)) - z * log(r + y) + y * log((r - z) / (r + z)) / 2
+
+    if r == zero(x)
+        return zero(x)
+    end
+
+    # Term 1: x * atan(y*z / (r*x))
+    # When x == 0, this is 0 * atan(...) = 0
+    term1 = if x == zero(x)
+        zero(x)
+    else
+        x * atan((y * z) / (r * x))
+    end
+
+    # Term 2: -z * log(r + y)
+    # When r + y == 0 (i.e., y = -r), z must also be 0 (since r = |x|), so z * log(...) = 0
+    term2 = if (r + y) <= zero(x)
+        zero(x)
+    else
+        -z * log(r + y)
+    end
+
+    # Term 3: y * log((r - z) / (r + z)) / 2
+    # When r + z == 0 (i.e., z = -r), y must also be 0, so y * log(...) = 0
+    # When r - z == 0 (i.e., z = r), y must also be 0, so y * log(...) = 0
+    term3 = if (r + z) <= zero(x) || (r - z) <= zero(x)
+        zero(x)
+    else
+        y * log((r - z) / (r + z)) / 2
+    end
+
+    return term1 + term2 + term3
 end
 
 
