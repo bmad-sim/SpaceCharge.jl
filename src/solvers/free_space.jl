@@ -62,7 +62,7 @@ function solve_freespace!(mesh::Mesh3D{T, A, B}; offset::NTuple{3, T} = (zero(T)
     fft_plan_inplace * crho
 
     # Normalization factor: 1/(4 pi eps0)
-    factr = (299792458.0^2 * 1.00000000055e-7)
+    factr = FPEI
 
     for icomp = 1:3
         # Get Green's function (reuse cgrn array)
