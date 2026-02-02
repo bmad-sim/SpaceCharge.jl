@@ -1,7 +1,7 @@
 name = "SpaceCharge"
 uuid = "886cafed-6ce3-46b8-9147-fe45a2210a4b"
-authors = ["Ningdong Wang <ndwang3@gmail.com>, Eiad Hamwi <eh652@cornell.edu>, Tianyu Huang <thuang23@u.rochester.edu>"]
-version = "1.1.0"
+authors = ["Ningdong Wang <ndwang3@gmail.com>", "Eiad Hamwi <eh652@cornell.edu>", "Tianyu Huang <thuang23@u.rochester.edu>"]
+version = "1.1.1"
 
 [deps]
 AbstractFFTs = "621f4979-c628-5d54-868e-fcf4e3e8185c"
@@ -10,26 +10,23 @@ Atomix = "a9b6321e-bd34-4604-b9c9-b65b8de01458"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
-LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
-AbstractFFTs = "1.5.0"
-Adapt = "4.3.0"
-Atomix = "1.1.1"
-CUDA = "5.8.2"
-FFTW = "1.9.0"
-KernelAbstractions = "0.9.35"
-LinearAlgebra = "1.11.0"
-SpecialFunctions = "2.5.1"
-StaticArrays = "1.9.13"
+AbstractFFTs = "1.5"
+Adapt = "4.3"
+Atomix = "1.1"
+CUDA = "5.8"
+FFTW = "1.9"
+KernelAbstractions = "0.9"
+SpecialFunctions = "2.5"
 julia = "1.9"
 
 
 [extras]
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "SpecialFunctions", "Random"]
+test = ["Test", "SpecialFunctions", "Random", "LinearAlgebra"]

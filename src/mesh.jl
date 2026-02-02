@@ -104,12 +104,16 @@ function Mesh3D(
     total_charge::Real=0.0
 )
     # --- Validation ---
-    if any(grid_size .<= 0)
-        error("All elements of grid_size must be positive.")
+    if any(grid_size .<= 1)
+        error("All elements of grid_size must be at least 2.")
     end
-    
+
     if isempty(particles_x) || isempty(particles_y) || isempty(particles_z)
         error("Particle arrays cannot be empty.")
+    end
+
+    if !(length(particles_x) == length(particles_y) == length(particles_z))
+        error("Particle coordinate arrays must have the same length.")
     end
 
     # --- Automatic Bounds Calculation ---
@@ -207,8 +211,8 @@ function Mesh3D(
     total_charge::Real=0.0
 )
     # --- Validation ---
-    if any(grid_size .<= 0)
-        error("All elements of grid_size must be positive.")
+    if any(grid_size .<= 1)
+        error("All elements of grid_size must be at least 2.")
     end
     if any(max_bounds .<= min_bounds)
         error("max_bounds must be strictly greater than min_bounds for all dimensions.")
@@ -246,4 +250,12 @@ function Mesh3D(
         efield,
         nothing,
     )
+end
+
+function Base.show(io::IO, mesh::Mesh3D{T}) where {T}
+    nx, ny, nz = mesh.grid_size
+    lo = mesh.min_bounds
+    hi = mesh.max_bounds
+    arr_type = nameof(typeof(mesh.rho).name.wrapper)
+    print(io, "Mesh3D{$T, $arr_type} ($(nx)x$(ny)x$(nz)) bounds=[($(lo[1]),$(lo[2]),$(lo[3])), ($(hi[1]),$(hi[2]),$(hi[3]))] gamma=$(mesh.gamma)")
 end

@@ -17,11 +17,24 @@ function solve!(mesh::Mesh3D; at_cathode::Bool = false)
     solve_freespace!(mesh, offset = (zero(T), zero(T), zero(T)))
 
     if at_cathode
-        # Image charge field
-        image_mesh = deepcopy(mesh)
-        image_mesh.rho .= -image_mesh.rho[:, :, end:-1:1]
+        # Image charge field shares workspace arrays to avoid redundant allocation
+        AT = typeof(mesh.rho)
+        BT = typeof(mesh.efield)
+        image_mesh = Mesh3D{T, AT, BT}(
+            mesh.grid_size,
+            mesh.min_bounds,
+            mesh.max_bounds,
+            mesh.delta,
+            mesh.gamma,
+            mesh.total_charge,
+            similar(mesh.rho),
+            similar(mesh.efield),
+            nothing,
+        )
+        image_mesh.rho .= -mesh.rho[:, :, end:-1:1]
+        image_mesh._workspace = _get_workspace(mesh)
 
-        # Image charge offset for cathode at z=0: 
+        # Image charge offset for cathode at z=0:
         # Real charge at z, image charge at -z, distance = 2z
         offset_z = 2 * mesh.min_bounds[3] + (mesh.max_bounds[3] - mesh.min_bounds[3])
         offset = (zero(T), zero(T), offset_z)
@@ -43,9 +56,6 @@ optimal performance on both CPU and GPU.
 function solve_freespace!(mesh::Mesh3D{T, A, B}; offset::NTuple{3, T} = (zero(T), zero(T), zero(T))) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
     nx, ny, nz = mesh.grid_size
 
-    # Set FFTW to use all available threads for optimal CPU performance
-    FFTW.set_num_threads(Threads.nthreads())
-
     # Get pre-allocated workspace (lazy initialization)
     workspace = _get_workspace(mesh)
     crho = workspace.crho
@@ -55,23 +65,24 @@ function solve_freespace!(mesh::Mesh3D{T, A, B}; offset::NTuple{3, T} = (zero(T)
     ifft_plan_inplace = workspace.ifft_plan_inplace
 
     # Clear and setup charge density array
-    fill!(crho, 0.0)
+    fill!(crho, zero(eltype(crho)))
     crho[1:nx, 1:ny, 1:nz] .= mesh.rho
 
     # In-place FFT of charge density
     fft_plan_inplace * crho
 
     # Normalization factor: 1/(4 pi eps0)
-    factr = (299792458.0^2 * 1.00000000055e-7)
+    factr = T(FPEI)
 
     for icomp = 1:3
-        # Get Green's function (reuse cgrn array)
+        # Get Green's function (reuse cgrn array, temp_result as scratch for differencing)
         get_green_function!(
             cgrn,
             mesh.delta,
             mesh.gamma,
             icomp,
             offset = offset,
+            temp = temp_result,
         )
 
         # In-place FFT of Green's function
