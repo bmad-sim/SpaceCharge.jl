@@ -1,6 +1,6 @@
 # SpaceCharge.jl
 
-SpaceCharge.jl is a high-performance Julia package for 3D space-charge calculations, supporting both CPU and GPU acceleration. It is designed for scientific computing applications such as beam physics and accelerator modeling.
+SpaceCharge.jl is a high-performance Julia package for 3D space-charge calculations, supporting both CPU and GPU (CUDA) acceleration. It is designed for beam physics and accelerator modeling applications.
 
 ## Algorithm and Citation
 
@@ -28,11 +28,9 @@ Pkg.add(url="https://github.com/ndwang/SpaceCharge.jl.git")
 
 ## Getting Started
 
-- **Examples:** See the `examples/` directory for scripts demonstrating basic usage, GPU acceleration, boundary conditions, and analytical comparisons.
+- **Examples:** See `examples/` for scripts demonstrating basic usage, GPU acceleration, cathode boundary conditions, and analytical comparisons.
 - **Benchmarks:** The `benchmark/` directory contains scripts to evaluate performance on different hardware and problem sizes.
-- **Tests:** The `test/` directory provides a comprehensive suite of tests to ensure correctness and stability.
-- **Design:** For architectural details, refer to `DesignDocument.md`.
-- **Development Tasks:** See `TODO.md` for current and planned development work.
+- **Tests:** The `test/` directory provides a comprehensive test suite including an analytical comparison against an isotropic Gaussian bunch.
 
 ## Contributing
 
