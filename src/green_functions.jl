@@ -15,8 +15,9 @@ This corresponds to the scalar potential.
     if r == zero(x)
         return zero(x)
     end
-    return -0.5 * z^2 * atan(x * y / (z * r)) - 0.5 * y^2 * atan(x * z / (y * r)) -
-           0.5 * x^2 * atan(y * z / (x * r)) + y * z * log(x + r) +
+    half = one(x) / 2
+    return -half * z^2 * atan(x * y / (z * r)) - half * y^2 * atan(x * z / (y * r)) -
+           half * x^2 * atan(y * z / (x * r)) + y * z * log(x + r) +
            x * z * log(y + r) + x * y * log(z + r)
 end
 
@@ -78,9 +79,9 @@ end
         one(dx) / (dx * dy * dz)
     end
 
-    umin = (0.5 - isize / 2) * dx + offset[1]
-    vmin = (0.5 - jsize / 2) * dy + offset[2]
-    wmin = (0.5 - ksize / 2) * dz + offset[3] * gamma
+    umin = (1 - isize) * dx / 2 + offset[1]
+    vmin = (1 - jsize) * dy / 2 + offset[2]
+    wmin = (1 - ksize) * dz / 2 + offset[3] * gamma
 
     u = (i - 1) * dx + umin
     v = (j - 1) * dy + vmin
