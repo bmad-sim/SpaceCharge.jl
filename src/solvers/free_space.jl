@@ -17,8 +17,7 @@ function solve!(mesh::Mesh3D; at_cathode::Bool = false)
     solve_freespace!(mesh, offset = (zero(T), zero(T), zero(T)))
 
     if at_cathode
-        # Image charge field — create a lightweight mesh instead of deepcopy
-        # to avoid copying workspace arrays and FFT plans
+        # Image charge field shares workspace arrays to avoid redundant allocation
         AT = typeof(mesh.rho)
         BT = typeof(mesh.efield)
         image_mesh = Mesh3D{T, AT, BT}(
@@ -33,6 +32,7 @@ function solve!(mesh::Mesh3D; at_cathode::Bool = false)
             nothing,
         )
         image_mesh.rho .= -mesh.rho[:, :, end:-1:1]
+        image_mesh._workspace = _get_workspace(mesh)
 
         # Image charge offset for cathode at z=0:
         # Real charge at z, image charge at -z, distance = 2z
