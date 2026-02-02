@@ -120,6 +120,40 @@ function run_gpu_tests()
             @test sum(Array(mesh_gpu.rho)) ≈ sum(Array(particles_q_gpu)) atol=1e-6
         end
 
+        # Test default backend inference from CuArray particles
+        @testset "Default Backend Inference" begin
+            grid_size = (6, 6, 6)
+            particles_x_gpu = CuArray([0.5f0, 1.0f0])
+            particles_y_gpu = CuArray([0.5f0, 1.0f0])
+            particles_z_gpu = CuArray([0.5f0, 1.0f0])
+
+            # No explicit backend — should infer CUDABackend from CuArray inputs
+            mesh_gpu = Mesh3D(grid_size, particles_x_gpu, particles_y_gpu, particles_z_gpu;
+                             T=Float32)
+
+            @test mesh_gpu.rho isa CuArray{Float32, 3}
+            @test mesh_gpu.efield isa CuArray{Float32, 4}
+            @test size(mesh_gpu.rho) == grid_size
+            @test size(mesh_gpu.efield) == (grid_size..., 3)
+        end
+
+        # Test manual bounds constructor with GPU backend
+        @testset "Manual Bounds Constructor GPU" begin
+            grid_size = (8, 8, 8)
+            min_bounds = (-1.0, -2.0, -3.0)
+            max_bounds = (1.0, 2.0, 3.0)
+
+            mesh_gpu = Mesh3D(grid_size, min_bounds, max_bounds;
+                             T=Float32, backend=CUDABackend())
+
+            @test mesh_gpu.rho isa CuArray{Float32, 3}
+            @test mesh_gpu.efield isa CuArray{Float32, 4}
+            @test size(mesh_gpu.rho) == grid_size
+            @test size(mesh_gpu.efield) == (grid_size..., 3)
+            @test mesh_gpu.min_bounds == Float32.(min_bounds)
+            @test mesh_gpu.max_bounds == Float32.(max_bounds)
+        end
+
         # Test GPU vs CPU consistency
         @testset "GPU vs CPU Consistency" begin
             grid_size = (4, 4, 4)
