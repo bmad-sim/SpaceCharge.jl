@@ -46,7 +46,7 @@ function compare_cpu_gpu_deposit(grid_size, n_particles)
         particles_q_gpu = CuArray(particles_q)
         
         # Create mesh on GPU
-        mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; array_type=CuArray)
+        mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; backend=CUDABackend())
         
         gpu_time = @belapsed begin
             deposit!($mesh_gpu, $particles_x_gpu, $particles_y_gpu, $particles_z_gpu, $particles_q_gpu)

@@ -1,8 +1,6 @@
 module SpaceCharge
 
 using KernelAbstractions
-using Adapt
-using CUDA
 using FFTW
 
 include("utils.jl")

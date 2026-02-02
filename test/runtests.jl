@@ -1,8 +1,17 @@
 using SpaceCharge
 using Test
-using CUDA
 using KernelAbstractions
 using FFTW
+
+# Conditionally load CUDA for GPU tests
+# Note: CUDA is not a required test dependency. To run GPU tests, install CUDA manually:
+#   using Pkg; Pkg.add("CUDA")
+const CUDA_AVAILABLE = try
+    using CUDA
+    CUDA.functional()
+catch
+    false
+end
 
 # Include individual test modules
 include("test_mesh.jl")
@@ -20,8 +29,10 @@ include("test_gpu.jl")
     run_interpolation_tests()
     
     # GPU tests only if CUDA is available
-    if CUDA.functional()
+    if CUDA_AVAILABLE
         run_gpu_tests()
+    else
+        @info "CUDA not available, skipping GPU tests"
     end
 end
 

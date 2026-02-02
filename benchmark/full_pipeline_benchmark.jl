@@ -39,7 +39,7 @@ function compare_cpu_gpu_full_pipeline(grid_size, n_particles; total_charge=1.0e
         particles_y_gpu = CuArray(particles_y)
         particles_z_gpu = CuArray(particles_z)
         particles_q_gpu = CuArray(particles_q)
-        mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; array_type=CuArray, total_charge=total_charge)
+        mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; backend=CUDABackend(), total_charge=total_charge)
         gpu_time = @belapsed begin
             deposit!($mesh_gpu, $particles_x_gpu, $particles_y_gpu, $particles_z_gpu, $particles_q_gpu)
             solve!($mesh_gpu)
