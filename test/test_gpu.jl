@@ -13,7 +13,7 @@ function run_gpu_tests()
             particles_q = [1.0]
             
             mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; 
-                             T=Float32, array_type=CuArray)
+                             T=Float32, backend=CUDABackend())
             
             @test eltype(mesh_gpu.rho) == Float32
             @test mesh_gpu.rho isa CuArray{Float32, 3}
@@ -29,7 +29,7 @@ function run_gpu_tests()
             particles_q_gpu = CuArray([1.0f0])
             
             mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, array_type=CuArray)
+                             T=Float32, backend=CUDABackend())
             
             deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
             
@@ -49,7 +49,7 @@ function run_gpu_tests()
             particles_q_gpu = CuArray([1.0f0])
             
             mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, array_type=CuArray)
+                             T=Float32, backend=CUDABackend())
             
             # Set up a simple field pattern (use broadcasting to avoid scalar indexing)
             efield_cpu = zeros(Float32, (6,6,6,3))
@@ -79,7 +79,7 @@ function run_gpu_tests()
             particles_q_gpu = CuArray([1.0f0])
             
             mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, array_type=CuArray, gamma=2.0)
+                             T=Float32, backend=CUDABackend(), gamma=2.0)
             
             # Deposit charge and solve
             deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
@@ -101,7 +101,7 @@ function run_gpu_tests()
             particles_q_gpu = CuArray([1.0f0, -1.0f0])
             
             mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, array_type=CuArray)
+                             T=Float32, backend=CUDABackend())
             
             # Deposit and solve
             deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
@@ -139,7 +139,7 @@ function run_gpu_tests()
             particles_z_gpu = CuArray(Float32.(particles_z))
             particles_q_gpu = CuArray(Float32.(particles_q))
             
-            mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; T=Float32, array_type=CuArray)
+            mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; T=Float32, backend=CUDABackend())
             deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
             solve!(mesh_gpu)
             
@@ -157,7 +157,7 @@ function run_gpu_tests()
             particles_q_gpu = CuArray([1.0f0])
             
             mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, array_type=CuArray)
+                             T=Float32, backend=CUDABackend())
             
             # Deposit some charge
             deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)

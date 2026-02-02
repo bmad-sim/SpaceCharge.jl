@@ -65,7 +65,7 @@ function run_mesh_tests()
             
             if CUDA.functional()
                 mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; 
-                                 T=Float32, array_type=CuArray)
+                                 T=Float32, backend=CUDABackend())
                 @test eltype(mesh_gpu.rho) == Float32
                 @test mesh_gpu.rho isa CuArray{Float32, 3}
                 @test mesh_gpu.efield isa CuArray{Float32, 4}
