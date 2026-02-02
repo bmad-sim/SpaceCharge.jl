@@ -1,6 +1,6 @@
 # SpaceCharge.jl
 
-SpaceCharge.jl is a high-performance Julia package for 3D space-charge calculations, supporting both CPU and GPU (CUDA) acceleration. It is designed for beam physics and accelerator modeling applications.
+SpaceCharge.jl is a high-performance Julia package for 3D space-charge calculations, supporting both CPU and GPU acceleration. It is designed for beam physics and accelerator modeling applications.
 
 ## Algorithm and Citation
 
