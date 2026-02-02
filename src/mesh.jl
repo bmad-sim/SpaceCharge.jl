@@ -85,7 +85,7 @@ This is the recommended constructor as it eliminates the need for bounds checkin
 
 # Keyword Arguments
 - `T::Type{<:AbstractFloat} = Float64`: The floating-point type for the mesh data.
-- `backend = CPU()`: The KernelAbstractions backend to use (e.g., `CPU()` for CPU, `CUDABackend()` for GPU).
+- `backend = get_backend(particles_x)`: The KernelAbstractions backend to use. Defaults to the backend of the particle arrays.
 - `gamma::Real = 1.0`: Relativistic gamma factor of the beam.
 - `total_charge::Real = 0.0`: Total charge of the particle bunch.
 
@@ -98,7 +98,7 @@ function Mesh3D(
     particles_y,
     particles_z;
     T::Type{<:AbstractFloat}=Float64,
-    backend=CPU(),
+    backend=get_backend(particles_x),
     gamma::Real=1.0,
     total_charge::Real=0.0
 )
