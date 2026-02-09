@@ -1,7 +1,7 @@
 name = "SpaceCharge"
 uuid = "886cafed-6ce3-46b8-9147-fe45a2210a4b"
 authors = ["Ningdong Wang <ndwang3@gmail.com>", "Eiad Hamwi <eh652@cornell.edu>", "Tianyu Huang <thuang23@u.rochester.edu>"]
-version = "1.1.1"
+version = "1.2.0"
 
 [deps]
 AbstractFFTs = "621f4979-c628-5d54-868e-fcf4e3e8185c"
