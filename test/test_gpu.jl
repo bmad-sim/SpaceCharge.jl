@@ -13,7 +13,7 @@ function run_gpu_tests()
             particles_q = [1.0]
             
             mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; 
-                             T=Float32, array_type=CuArray)
+                             T=Float32, backend=CUDABackend())
             
             @test eltype(mesh_gpu.rho) == Float32
             @test mesh_gpu.rho isa CuArray{Float32, 3}
@@ -29,7 +29,7 @@ function run_gpu_tests()
             particles_q_gpu = CuArray([1.0f0])
             
             mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, array_type=CuArray)
+                             T=Float32, backend=CUDABackend())
             
             deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
             
@@ -49,7 +49,7 @@ function run_gpu_tests()
             particles_q_gpu = CuArray([1.0f0])
             
             mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, array_type=CuArray)
+                             T=Float32, backend=CUDABackend())
             
             # Set up a simple field pattern (use broadcasting to avoid scalar indexing)
             efield_cpu = zeros(Float32, (6,6,6,3))
@@ -79,7 +79,7 @@ function run_gpu_tests()
             particles_q_gpu = CuArray([1.0f0])
             
             mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, array_type=CuArray, gamma=2.0)
+                             T=Float32, backend=CUDABackend(), gamma=2.0)
             
             # Deposit charge and solve
             deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
@@ -101,7 +101,7 @@ function run_gpu_tests()
             particles_q_gpu = CuArray([1.0f0, -1.0f0])
             
             mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, array_type=CuArray)
+                             T=Float32, backend=CUDABackend())
             
             # Deposit and solve
             deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
@@ -118,6 +118,40 @@ function run_gpu_tests()
             
             # Check charge conservation
             @test sum(Array(mesh_gpu.rho)) ≈ sum(Array(particles_q_gpu)) atol=1e-6
+        end
+
+        # Test default backend inference from CuArray particles
+        @testset "Default Backend Inference" begin
+            grid_size = (6, 6, 6)
+            particles_x_gpu = CuArray([0.5f0, 1.0f0])
+            particles_y_gpu = CuArray([0.5f0, 1.0f0])
+            particles_z_gpu = CuArray([0.5f0, 1.0f0])
+
+            # No explicit backend — should infer CUDABackend from CuArray inputs
+            mesh_gpu = Mesh3D(grid_size, particles_x_gpu, particles_y_gpu, particles_z_gpu;
+                             T=Float32)
+
+            @test mesh_gpu.rho isa CuArray{Float32, 3}
+            @test mesh_gpu.efield isa CuArray{Float32, 4}
+            @test size(mesh_gpu.rho) == grid_size
+            @test size(mesh_gpu.efield) == (grid_size..., 3)
+        end
+
+        # Test manual bounds constructor with GPU backend
+        @testset "Manual Bounds Constructor GPU" begin
+            grid_size = (8, 8, 8)
+            min_bounds = (-1.0, -2.0, -3.0)
+            max_bounds = (1.0, 2.0, 3.0)
+
+            mesh_gpu = Mesh3D(grid_size, min_bounds, max_bounds;
+                             T=Float32, backend=CUDABackend())
+
+            @test mesh_gpu.rho isa CuArray{Float32, 3}
+            @test mesh_gpu.efield isa CuArray{Float32, 4}
+            @test size(mesh_gpu.rho) == grid_size
+            @test size(mesh_gpu.efield) == (grid_size..., 3)
+            @test mesh_gpu.min_bounds == Float32.(min_bounds)
+            @test mesh_gpu.max_bounds == Float32.(max_bounds)
         end
 
         # Test GPU vs CPU consistency
@@ -139,7 +173,7 @@ function run_gpu_tests()
             particles_z_gpu = CuArray(Float32.(particles_z))
             particles_q_gpu = CuArray(Float32.(particles_q))
             
-            mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; T=Float32, array_type=CuArray)
+            mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; T=Float32, backend=CUDABackend())
             deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
             solve!(mesh_gpu)
             
@@ -157,7 +191,7 @@ function run_gpu_tests()
             particles_q_gpu = CuArray([1.0f0])
             
             mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, array_type=CuArray)
+                             T=Float32, backend=CUDABackend())
             
             # Deposit some charge
             deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)

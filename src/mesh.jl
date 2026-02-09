@@ -1,4 +1,3 @@
-using Adapt
 using AbstractFFTs
 
 """
@@ -86,7 +85,7 @@ This is the recommended constructor as it eliminates the need for bounds checkin
 
 # Keyword Arguments
 - `T::Type{<:AbstractFloat} = Float64`: The floating-point type for the mesh data.
-- `array_type::Type{<:AbstractArray} = Array`: The array type to use for data storage (e.g., `Array` for CPU, `CuArray` for GPU).
+- `backend = get_backend(particles_x)`: The KernelAbstractions backend to use. Defaults to the backend of the particle arrays.
 - `gamma::Real = 1.0`: Relativistic gamma factor of the beam.
 - `total_charge::Real = 0.0`: Total charge of the particle bunch.
 
@@ -99,7 +98,7 @@ function Mesh3D(
     particles_y,
     particles_z;
     T::Type{<:AbstractFloat}=Float64,
-    array_type::Type{<:AbstractArray}=Array,
+    backend=get_backend(particles_x),
     gamma::Real=1.0,
     total_charge::Real=0.0
 )
@@ -157,18 +156,11 @@ function Mesh3D(
     cv_total_charge = T(total_charge)
 
     # --- Array Allocation ---
-    # Create arrays on the CPU first
-    rho_cpu = zeros(T, grid_size)
-    efield_cpu = zeros(T, (grid_size..., 3))
-
-    # Move arrays to the target device (e.g., GPU)
-    rho = adapt(array_type, rho_cpu)
-    efield = adapt(array_type, efield_cpu)
+    rho = KernelAbstractions.zeros(backend, T, grid_size...)
+    efield = KernelAbstractions.zeros(backend, T, grid_size..., 3)
 
     # --- Struct Instantiation ---
-    A = typeof(rho) # Get the concrete array type
-    B = typeof(efield)
-    return Mesh3D{T, A, B}(
+    return Mesh3D{T, typeof(rho), typeof(efield)}(
         grid_size,
         cv_min_bounds,
         cv_max_bounds,
@@ -194,7 +186,7 @@ Use the particle-based constructor instead for automatic bounds determination.
 
 # Keyword Arguments
 - `T::Type{<:AbstractFloat} = Float64`: The floating-point type for the mesh data.
-- `array_type::Type{<:AbstractArray} = Array`: The array type to use for data storage (e.g., `Array` for CPU, `CuArray` for GPU).
+- `backend = CPU()`: The KernelAbstractions backend to use (e.g., `CPU()` for CPU, `CUDABackend()` for GPU).
 - `gamma::Real = 1.0`: Relativistic gamma factor of the beam.
 - `total_charge::Real = 0.0`: Total charge of the particle bunch.
 
@@ -206,7 +198,7 @@ function Mesh3D(
     min_bounds::NTuple{3, Real},
     max_bounds::NTuple{3, Real};
     T::Type{<:AbstractFloat}=Float64,
-    array_type::Type{<:AbstractArray}=Array,
+    backend=CPU(),
     gamma::Real=1.0,
     total_charge::Real=0.0
 )
@@ -228,18 +220,11 @@ function Mesh3D(
     delta = (cv_max_bounds .- cv_min_bounds) ./ (grid_size .- 1)
 
     # --- Array Allocation ---
-    # Create arrays on the CPU first
-    rho_cpu = zeros(T, grid_size)
-    efield_cpu = zeros(T, (grid_size..., 3))
-
-    # Move arrays to the target device (e.g., GPU)
-    rho = adapt(array_type, rho_cpu)
-    efield = adapt(array_type, efield_cpu)
+    rho = KernelAbstractions.zeros(backend, T, grid_size...)
+    efield = KernelAbstractions.zeros(backend, T, grid_size..., 3)
 
     # --- Struct Instantiation ---
-    A = typeof(rho) # Get the concrete array type
-    B = typeof(efield)
-    return Mesh3D{T, A, B}(
+    return Mesh3D{T, typeof(rho), typeof(efield)}(
         grid_size,
         cv_min_bounds,
         cv_max_bounds,
