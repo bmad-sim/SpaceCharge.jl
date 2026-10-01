@@ -149,10 +149,12 @@ function run_interpolation_tests()
             @test all(isfinite.(Ey))
             @test all(isfinite.(Ez))
             
-            # For a central charge, fields at the center should be large
-            @test abs(Ex[1]) > 1e7
-            @test abs(Ey[1]) > 1e7
-            @test abs(Ez[1]) > 1e7
+            # A charge has zero self-field. Scale roundoff by the mesh field,
+            # not an absolute threshold (this test uses a micron-sized cell).
+            scale = maximum(abs, mesh.efield)
+            @test abs(Ex[1]) < 1e-10 * scale
+            @test abs(Ey[1]) < 1e-10 * scale
+            @test abs(Ez[1]) < 1e-10 * scale
         end
 
         # Test interpolation edge cases

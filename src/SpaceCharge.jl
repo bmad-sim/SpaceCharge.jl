@@ -2,6 +2,7 @@ module SpaceCharge
 
 using KernelAbstractions
 using FFTW
+using LinearAlgebra: mul!
 
 include("utils.jl")
 include("mesh.jl")

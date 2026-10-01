@@ -11,10 +11,10 @@ Solves the space charge problem for free-space boundary conditions.
 - `mesh`: A `Mesh3D` object containing the charge density and where the fields will be stored.
 - `at_cathode`: A boolean indicating whether to model a cathode at z=0.
 """
-function solve!(mesh::Mesh3D; at_cathode::Bool = false)
+function solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE)
     # Real charge field
     T = eltype(mesh.rho)
-    solve_freespace!(mesh, offset = (zero(T), zero(T), zero(T)))
+    solve_freespace!(mesh; offset = (zero(T), zero(T), zero(T)), fft_flags)
 
     if at_cathode
         # Image charge field shares workspace arrays to avoid redundant allocation
@@ -32,14 +32,14 @@ function solve!(mesh::Mesh3D; at_cathode::Bool = false)
             nothing,
         )
         image_mesh.rho .= -mesh.rho[:, :, end:-1:1]
-        image_mesh._workspace = _get_workspace(mesh)
+        image_mesh._workspace = _get_workspace(mesh; fft_flags)
 
         # Image charge offset for cathode at z=0:
         # Real charge at z, image charge at -z, distance = 2z
         offset_z = 2 * mesh.min_bounds[3] + (mesh.max_bounds[3] - mesh.min_bounds[3])
         offset = (zero(T), zero(T), offset_z)
 
-        solve_freespace!(image_mesh, offset = offset)
+        _solve_freespace!(image_mesh, image_mesh._workspace, offset)
 
         # Superposition of fields
         mesh.efield .+= image_mesh.efield
@@ -53,49 +53,25 @@ Optimized free-space solver for computing electric field from charge density.
 Uses pre-allocated workspace arrays, cached in-place FFT plans, and CPU multi-threading for 
 optimal performance on both CPU and GPU.
 """
-function solve_freespace!(mesh::Mesh3D{T, A, B}; offset::NTuple{3, T} = (zero(T), zero(T), zero(T))) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
+function solve_freespace!(mesh::Mesh3D{T};
+    offset::NTuple{3,T}=(zero(T),zero(T),zero(T)), fft_flags=FFTW.MEASURE) where T
+    _solve_freespace!(mesh, _get_workspace(mesh; fft_flags), offset)
+end
+
+# Function barrier specializes the plans and buffers stored in the mesh.
+function _solve_freespace!(mesh::Mesh3D{T}, w, offset) where T
     nx, ny, nz = mesh.grid_size
-
-    # Get pre-allocated workspace (lazy initialization)
-    workspace = _get_workspace(mesh)
-    crho = workspace.crho
-    cgrn = workspace.cgrn
-    temp_result = workspace.temp_result
-    fft_plan_inplace = workspace.fft_plan_inplace
-    ifft_plan_inplace = workspace.ifft_plan_inplace
-
-    # Clear and setup charge density array
-    fill!(crho, zero(eltype(crho)))
-    crho[1:nx, 1:ny, 1:nz] .= mesh.rho
-
-    # In-place FFT of charge density
-    fft_plan_inplace * crho
-
-    # Normalization factor: 1/(4 pi eps0)
-    factr = T(FPEI)
-
-    for icomp = 1:3
-        # Get Green's function (reuse cgrn array, temp_result as scratch for differencing)
-        get_green_function!(
-            cgrn,
-            mesh.delta,
-            mesh.gamma,
-            icomp,
-            offset = offset,
-            temp = temp_result,
-        )
-
-        # In-place FFT of Green's function
-        fft_plan_inplace * cgrn
-
-        # Convolution (vectorized operation)
-        @. temp_result = crho * cgrn
-
-        # In-place inverse FFT
-        ifft_plan_inplace * temp_result
-
-        # Extract field using optimized slicing
-        ishift, jshift, kshift = nx - 1, ny - 1, nz - 1
-        @views @. mesh.efield[:, :, :, icomp] = factr * real(temp_result[1+ishift:nx+ishift, 1+jshift:ny+jshift, 1+kshift:nz+kshift])
+    fill!(w.pad, zero(T))
+    @views w.pad[1:nx, 1:ny, 1:nz] .= mesh.rho
+    mul!(w.rhohat, w.forward, w.pad)
+    factor = T(FPEI) / T(length(w.pad))
+    for comp in 1:3
+        get_green_function!(w.pad, mesh.delta, mesh.gamma, comp;
+                            offset, temp=w.result)
+        mul!(w.product, w.forward, w.pad)
+        w.product .*= w.rhohat
+        mul!(w.result, w.backward, w.product)
+        @views @. mesh.efield[:,:,:,comp] = factor * w.result[nx:2nx-1,ny:2ny-1,nz:2nz-1]
     end
+    return nothing
 end

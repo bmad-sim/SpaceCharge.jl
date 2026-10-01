@@ -32,6 +32,23 @@ Pkg.add(url="https://github.com/ndwang/SpaceCharge.jl.git")
 - **Benchmarks:** The `benchmark/` directory contains scripts to evaluate performance on different hardware and problem sizes.
 - **Tests:** The `test/` directory provides a comprehensive test suite including an analytical comparison against an isotropic Gaussian bunch.
 
+## Repeated field calculations
+
+Reuse a mesh and particle field outputs between steps:
+
+```julia
+Ex, Ey, Ez = similar(x), similar(y), similar(z)
+deposit!(mesh, x, y, z, q)
+solve!(mesh)
+interpolate_field!(Ex, Ey, Ez, mesh, x, y, z)
+```
+
+The allocating `interpolate_field(mesh, x, y, z)` remains supported. The solver
+uses real FFTs with reusable scratch buffers. CPU plans use `FFTW.MEASURE` at
+the first solve; use `solve!(mesh; fft_flags=FFTW.ESTIMATE)` to reduce setup time
+for short runs. GPU plans use their backend defaults. FFT setup is amortized by
+repeated solves, so measure both initialization and warmed tracking throughput.
+
 ## Contributing
 
 Contributions are welcome! Please open issues or pull requests for bug reports, feature requests, or improvements.

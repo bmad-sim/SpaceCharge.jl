@@ -97,7 +97,7 @@ end
         zero(dx)
     end
 
-    cgrn[i, j, k] = Complex{typeof(gval)}(gval, zero(gval))
+    cgrn[i, j, k] = gval
 end
 
 @kernel function apply_8point_differencing!(out, cgrn)

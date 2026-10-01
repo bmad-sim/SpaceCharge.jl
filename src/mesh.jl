@@ -34,43 +34,35 @@ mutable struct Mesh3D{T <: AbstractFloat, A <: AbstractArray{T}, B <: AbstractAr
 end
 
 """
-    _get_workspace(mesh::Mesh3D{T, A, B}) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
+    _get_workspace(mesh; fft_flags=FFTW.MEASURE)
 
-Get or create the workspace for the mesh. This includes pre-allocated arrays 
-and cached in-place FFT plans for maximum performance of the free space solver.
-
-The workspace contains:
-- `crho`: Complex charge density array (doubled size for FFT padding)
-- `cgrn`: Complex Green's function array 
-- `temp_result`: Complex temporary result array
-- `fft_plan_inplace`: Cached in-place forward FFT plan
-- `ifft_plan_inplace`: Cached in-place inverse FFT plan
+Lazily allocate real FFT buffers and plans. CPU planning effort is configurable;
+GPU plans use the backend default. Replacing mesh arrays rebuilds the workspace.
 """
-function _get_workspace(mesh::Mesh3D{T, A, B}) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
-    if mesh._workspace === nothing
-        nx, ny, nz = mesh.grid_size
-        nx2, ny2, nz2 = 2nx, 2ny, 2nz
-        
-        # Pre-allocate workspace arrays
-        crho = similar(mesh.rho, Complex{T}, nx2, ny2, nz2)
-        cgrn = similar(mesh.rho, Complex{T}, nx2, ny2, nz2)
-        temp_result = similar(mesh.rho, Complex{T}, nx2, ny2, nz2)
-        
-        # Create in-place FFT plans (optimized for memory efficiency)
-        fft_plan_inplace = plan_fft!(crho)
-        ifft_plan_inplace = plan_ifft!(temp_result)
-        
-        mesh._workspace = (
-            crho = crho,
-            cgrn = cgrn,
-            temp_result = temp_result,
-            fft_plan_inplace = fft_plan_inplace,
-            ifft_plan_inplace = ifft_plan_inplace,
-        )
+function _get_workspace(mesh::Mesh3D{T}; fft_flags=FFTW.MEASURE) where T
+    n = mesh.grid_size
+    size(mesh.rho) == n || throw(DimensionMismatch("rho does not match grid_size"))
+    size(mesh.efield) == (n..., 3) || throw(DimensionMismatch("efield does not match grid_size"))
+    w = mesh._workspace
+    if w === nothing || w.owner !== mesh.rho || w.field_owner !== mesh.efield ||
+       size(w.pad) != 2 .* n || w.flags != fft_flags
+        dims = 2 .* n
+        pad = similar(mesh.rho, dims)
+        result = similar(pad)
+        rhohat = similar(mesh.rho, Complex{T}, (n[1]+1, dims[2], dims[3]))
+        product = similar(rhohat)
+        if get_backend(mesh.rho) isa CPU
+            forward = plan_rfft(pad; flags=fft_flags)
+            backward = plan_brfft(product, dims[1]; flags=fft_flags)
+        else
+            forward = plan_rfft(pad)
+            backward = plan_brfft(product, dims[1])
+        end
+        mesh._workspace = (;owner=mesh.rho, field_owner=mesh.efield,
+                            flags=fft_flags, pad, result, rhohat, product, forward, backward)
     end
     return mesh._workspace
 end
-
 """
     Mesh3D(grid_size, particles_x, particles_y, particles_z; kwargs...)
 

@@ -154,34 +154,26 @@ function run_gpu_tests()
             @test mesh_gpu.max_bounds == Float32.(max_bounds)
         end
 
-        # Test GPU vs CPU consistency
-        @testset "GPU vs CPU Consistency" begin
-            grid_size = (4, 4, 4)
-            particles_x = [0.5]
-            particles_y = [0.5]
-            particles_z = [0.5]
-            particles_q = [1.0]
-            
-            # CPU mesh
-            mesh_cpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; T=Float32)
-            deposit!(mesh_cpu, particles_x, particles_y, particles_z, particles_q)
-            solve!(mesh_cpu)
-            
-            # GPU mesh
-            particles_x_gpu = CuArray(Float32.(particles_x))
-            particles_y_gpu = CuArray(Float32.(particles_y))
-            particles_z_gpu = CuArray(Float32.(particles_z))
-            particles_q_gpu = CuArray(Float32.(particles_q))
-            
-            mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; T=Float32, backend=CUDABackend())
-            deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
-            solve!(mesh_gpu)
-            
-            # Check that results are similar (allowing for floating point differences)
-            @test isapprox(sum(Array(mesh_gpu.rho)), sum(mesh_cpu.rho), atol=1e-5)
-            @test isapprox(sum(Array(mesh_gpu.efield)), sum(mesh_cpu.efield), rtol=1e-5)
+        # Compare each component on a physical, nondegenerate mesh, against
+        # the independent Float64 reference (not a cancellation-prone sum).
+        @testset "GPU vs independent reference" begin
+            for T in (Float32, Float64), cathode in (false, true)
+                cpu = reference_test_mesh(T, (5,6,4), 10.0)
+                gpu = Mesh3D(cpu.grid_size, cpu.min_bounds, cpu.max_bounds;
+                             T, gamma=cpu.gamma, backend=CUDABackend())
+                copyto!(gpu.rho, cpu.rho)
+                solve!(gpu; at_cathode=cathode)
+                copyto!(cpu.efield, Array(gpu.efield))
+                test_field_against_reference(cpu; at_cathode=cathode)
+                x = CuArray(T[0, 0.01]); y = copy(x); z = CuArray(T[0.002,0.003])
+                outputs = (similar(x), similar(x), similar(x))
+                @test interpolate_field!(outputs...,gpu,x,y,z) === outputs
+                expected = interpolate_field(cpu, Array(x), Array(y), Array(z))
+                for (actual, ref) in zip(outputs, expected)
+                    @test Array(actual) ≈ ref rtol=20eps(T)
+                end
+            end
         end
-
         # Test GPU clear_mesh!
         @testset "GPU Clear Mesh" begin
             grid_size = (4, 4, 4)
@@ -202,4 +194,4 @@ function run_gpu_tests()
             @test all(Array(mesh_gpu.rho) .== 0.0f0)
         end
     end
-end 
+end
