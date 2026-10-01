@@ -16,6 +16,7 @@ end
 # Include individual test modules
 include("test_mesh.jl")
 include("test_deposition.jl")
+include("test_threaded_deposition.jl")
 include("test_solvers.jl")
 include("test_solver_reference.jl")
 include("test_interpolation.jl")
@@ -26,6 +27,7 @@ CUDA_AVAILABLE && include("test_gpu.jl")
     # Run all test modules
     run_mesh_tests()
     run_deposition_tests()
+    run_threaded_deposition_tests()
     run_solver_tests()
     run_solver_reference_tests()
     run_solver_cache_reference_tests()

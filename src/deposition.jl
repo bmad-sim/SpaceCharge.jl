@@ -160,8 +160,8 @@ end
 """
     deposit_vectorized!(mesh, particles_x, particles_y, particles_z, particles_q)
 
-SIMD-vectorized deposit function for CPU that processes multiple particles simultaneously.
-This provides the best performance for high particle counts while maintaining thread safety.
+Serial CPU deposition, with a SIMD hint where the compiler can safely vectorize.
+Particles can share grid nodes, so scatter updates retain their dependencies.
 No bounds checking is needed as the mesh is sized to contain all particles.
 """
 function deposit_vectorized!(
@@ -196,13 +196,85 @@ function deposit_vectorized!(
     end
 end
 
+# Private grids avoid atomic contention for CPU deposition. Keep the additional
+# storage bounded and use enough particles per chunk to amortize clearing and
+# reducing a full grid. These conservative cutoffs do not affect the result.
+const _DEPOSIT_MAX_SCRATCH_BYTES = 64 * 1024 * 1024
+const _DEPOSIT_MAX_CHUNKS = 8
+const _DEPOSIT_MIN_PARTICLES_PER_CHUNK = 16_384
+
+function _deposit_chunk_count(nparticles, ncells, element_bytes, nthreads)
+    bytes_per_grid = ncells * element_bytes
+    memory_chunks = div(_DEPOSIT_MAX_SCRATCH_BYTES, max(1, bytes_per_grid))
+    particles_per_chunk = max(_DEPOSIT_MIN_PARTICLES_PER_CHUNK, cld(ncells, 4))
+    return max(1, min(nthreads, _DEPOSIT_MAX_CHUNKS, memory_chunks,
+                      div(nparticles, particles_per_chunk)))
+end
+
+function _get_deposit_workspace!(mesh::Mesh3D{T}, nchunks) where {T}
+    scratch = mesh._deposit_workspace
+    if scratch === nothing || length(scratch) < nchunks || size(first(scratch)) != size(mesh.rho)
+        scratch = [Array{T,3}(undef, size(mesh.rho)) for _ in 1:nchunks]
+        mesh._deposit_workspace = scratch
+    end
+    return scratch
+end
+
+function _deposit_threaded!(mesh, particles_x, particles_y, particles_z, particles_q, scratch, nchunks)
+    n = length(particles_x)
+    bounds, delta = mesh.min_bounds, mesh.delta
+    # Scratch belongs to the logical chunk, not the worker thread. Task
+    # migration and calls from a non-primary Julia thread are therefore safe.
+    Threads.@threads for chunk in 1:nchunks
+        grid = scratch[chunk]
+        fill!(grid, zero(eltype(grid)))
+        first_particle = div(n * (chunk - 1), nchunks) + 1
+        last_particle = div(n * chunk, nchunks)
+        @inbounds for i in first_particle:last_particle
+            deposit_particle!(grid, particles_x[i], particles_y[i], particles_z[i],
+                              particles_q[i], bounds, delta; use_atomic=false)
+        end
+    end
+    rho = mesh.rho
+    # All contributions for each cell are reduced in a fixed chunk order.
+    # The existing mesh is retained when deposit!(...; clear=false) is used.
+    Threads.@threads for block in 1:nchunks
+        first_cell = div(length(rho) * (block - 1), nchunks) + 1
+        last_cell = div(length(rho) * block, nchunks)
+        @inbounds @simd for cell in first_cell:last_cell
+            charge = zero(eltype(rho))
+            for chunk in 1:nchunks
+                charge += scratch[chunk][cell]
+            end
+            rho[cell] += charge
+        end
+    end
+    return nothing
+end
+
+function deposit_cpu!(mesh, particles_x, particles_y, particles_z, particles_q)
+    # Retain the serial generic-array path; private scratch is ordinary dense
+    # CPU storage, as are the normal Mesh3D CPU arrays.
+    nchunks = mesh.rho isa Array && isbitstype(eltype(mesh.rho)) ? _deposit_chunk_count(length(particles_x),
+        length(mesh.rho), sizeof(eltype(mesh.rho)), Threads.nthreads()) : 1
+    if nchunks == 1
+        deposit_vectorized!(mesh, particles_x, particles_y, particles_z, particles_q)
+    else
+        scratch = _get_deposit_workspace!(mesh, nchunks)
+        _deposit_threaded!(mesh, particles_x, particles_y, particles_z, particles_q,
+                           scratch, nchunks)
+    end
+    return nothing
+end
+
 """
     deposit!(mesh, particles_x, particles_y, particles_z, particles_q; clear=true)
 
 Deposit particle charges onto the grid in a `Mesh3D` object.
 
-This function uses multiple dispatch to automatically choose the best deposition method:
-- For CPU arrays: Uses vectorized method for best performance  
+This function selects deposition based on the backend and workload:
+- For CPU arrays: Uses private-grid threading for sufficiently large particle
+  batches, with a serial fallback. Additional scratch is bounded to 64 MiB.
 - For GPU arrays: Uses optimized GPU kernel
 
 # Arguments
@@ -235,9 +307,7 @@ function deposit!(
 
     # Determine the appropriate deposition method based on array type
     if backend isa CPU
-        # Use CPU vectorized method for CPU arrays
-        # Not using multithreading because atomic operations are slower
-        deposit_vectorized!(mesh, particles_x, particles_y, particles_z, particles_q)
+        deposit_cpu!(mesh, particles_x, particles_y, particles_z, particles_q)
     elseif backend isa GPU
         # Use GPU kernel for GPU arrays
         deposit_gpu!(mesh, particles_x, particles_y, particles_z, particles_q)

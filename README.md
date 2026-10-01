@@ -67,6 +67,13 @@ change the image offset and do invalidate that kernel.
 
 Use one mesh per independently concurrent solve; its scratch and cache are mutable.
 
+Large CPU deposition batches use private grids and a fixed-order reduction,
+avoiding atomic writes. This scratch is reused and limited to 64 MiB and eight
+logical chunks per mesh; small batches retain the serial path. Start Julia with
+`--threads=N` to enable CPU parallelism. GPU deposition continues to use the
+existing atomic CIC kernel. Cathode fields accumulate directly from the FFT
+scratch, without allocating an image mesh or image field each step.
+
 ## Contributing
 
 Contributions are welcome! Please open issues or pull requests for bug reports, feature requests, or improvements.

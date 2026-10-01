@@ -39,6 +39,21 @@ mutable struct Mesh3D{T <: AbstractFloat, A <: AbstractArray{T}, B <: AbstractAr
     efield::B
     # Optimization workspace (lazy initialization)
     _workspace::Union{Nothing, NamedTuple}
+    # CPU deposition uses independent bounded scratch; it needs no FFT plans.
+    _deposit_workspace::Union{Nothing,Vector{Array{T,3}}}
+end
+
+# Preserve the former positional construction API while adding lazy scratch.
+function Mesh3D{T,A,B}(grid_size, min_bounds, max_bounds, delta, gamma,
+                      total_charge, rho, efield, workspace) where {T,A,B}
+    Mesh3D{T,A,B}(grid_size, min_bounds, max_bounds, delta, gamma,
+                  total_charge, rho, efield, workspace, nothing)
+end
+
+function Mesh3D(grid_size, min_bounds, max_bounds, delta, gamma::T,
+                total_charge, rho::A, efield::B, workspace) where {T,A,B}
+    Mesh3D{T,A,B}(grid_size, min_bounds, max_bounds, delta, gamma,
+                  total_charge, rho, efield, workspace, nothing)
 end
 
 """
