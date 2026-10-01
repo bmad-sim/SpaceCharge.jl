@@ -3,6 +3,21 @@ using Test
 
 function run_solver_tests()
     @testset "Solvers" begin
+        @testset "Cathode boundary and repeated superposition" begin
+            mesh = Mesh3D((7,8,9), (-0.02,-0.03,0.0), (0.02,0.03,0.04); gamma=2.0)
+            mesh.rho[3,5,4] = 1e-12
+            mesh.rho[6,2,7] = 2e-12
+            source = copy(mesh.rho)
+            solve!(mesh)
+            free = copy(mesh.efield)
+            for cached in (false, true, true)
+                solve!(mesh; at_cathode=true, cache_green=cached)
+                @test mesh.rho == source
+                scale = maximum(abs, mesh.efield)
+                @test maximum(abs, mesh.efield[:,:,1,1:2]) < 1e-10 * scale
+                @test mesh.efield[:,:,1,3] ≈ 2free[:,:,1,3] rtol=1e-10
+            end
+        end
         # Test FreeSpace Solver
         @testset "FreeSpace Solver" begin
             grid_size = (16, 16, 16)

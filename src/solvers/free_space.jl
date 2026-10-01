@@ -21,33 +21,14 @@ function solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE, 
     solve_freespace!(mesh; offset = (zero(T), zero(T), zero(T)), fft_flags, cache_green)
 
     if at_cathode
-        # Image charge field shares workspace arrays to avoid redundant allocation
-        AT = typeof(mesh.rho)
-        BT = typeof(mesh.efield)
-        image_mesh = Mesh3D{T, AT, BT}(
-            mesh.grid_size,
-            mesh.min_bounds,
-            mesh.max_bounds,
-            mesh.delta,
-            mesh.gamma,
-            mesh.total_charge,
-            similar(mesh.rho),
-            similar(mesh.efield),
-            nothing,
-        )
-        image_mesh.rho .= -mesh.rho[:, :, end:-1:1]
-        image_mesh._workspace = _get_workspace(mesh; fft_flags)
-
-        # Image charge offset for cathode at z=0:
-        # Real charge at z, image charge at -z, distance = 2z
+        # Image charge at -z: reverse and negate directly into the FFT input.
+        # Accumulate each component into the real field without an image mesh.
         offset_z = 2 * mesh.min_bounds[3] + (mesh.max_bounds[3] - mesh.min_bounds[3])
         offset = (zero(T), zero(T), offset_z)
-
-        _solve_freespace!(image_mesh, image_mesh._workspace, offset; cache_green)
-
-        # Superposition of fields
-        mesh.efield .+= image_mesh.efield
+        _solve_freespace!(mesh, _get_workspace(mesh; fft_flags), offset;
+                         cache_green, image=true)
     end
+    return nothing
 end
 
 """
@@ -92,10 +73,14 @@ function _cached_spectra!(mesh, w, offset)
 end
 
 # Function barrier specializes the plans and buffers stored in the mesh.
-function _solve_freespace!(mesh::Mesh3D{T}, w, offset; cache_green=true) where T
+function _solve_freespace!(mesh::Mesh3D{T}, w, offset; cache_green=true, image=false) where T
     nx, ny, nz = mesh.grid_size
     fill!(w.pad, zero(T))
-    @views w.pad[1:nx, 1:ny, 1:nz] .= mesh.rho
+    if image
+        @views @. w.pad[1:nx, 1:ny, 1:nz] = -mesh.rho[:, :, nz:-1:1]
+    else
+        @views w.pad[1:nx, 1:ny, 1:nz] .= mesh.rho
+    end
     mul!(w.rhohat, w.forward, w.pad)
     greens = cache_green ? _cached_spectra!(mesh, w, offset) : nothing
     factor = T(FPEI) / T(length(w.pad))
@@ -107,7 +92,11 @@ function _solve_freespace!(mesh::Mesh3D{T}, w, offset; cache_green=true) where T
             @. w.product = greens[comp] * w.rhohat
         end
         mul!(w.result, w.backward, w.product)
-        @views @. mesh.efield[:,:,:,comp] = factor * w.result[nx:2nx-1,ny:2ny-1,nz:2nz-1]
+        if image
+            @views @. mesh.efield[:,:,:,comp] += factor * w.result[nx:2nx-1,ny:2ny-1,nz:2nz-1]
+        else
+            @views @. mesh.efield[:,:,:,comp] = factor * w.result[nx:2nx-1,ny:2ny-1,nz:2nz-1]
+        end
     end
     return nothing
 end
