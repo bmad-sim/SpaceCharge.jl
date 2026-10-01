@@ -51,6 +51,8 @@ function _get_workspace(mesh::Mesh3D{T}; fft_flags=FFTW.MEASURE) where T
         result = similar(pad)
         rhohat = similar(mesh.rho, Complex{T}, (n[1]+1, dims[2], dims[3]))
         product = similar(rhohat)
+        corners = similar(mesh.rho, n .+ 1)
+        octant = similar(mesh.rho)
         if get_backend(mesh.rho) isa CPU
             forward = plan_rfft(pad; flags=fft_flags)
             backward = plan_brfft(product, dims[1]; flags=fft_flags)
@@ -59,7 +61,8 @@ function _get_workspace(mesh::Mesh3D{T}; fft_flags=FFTW.MEASURE) where T
             backward = plan_brfft(product, dims[1])
         end
         mesh._workspace = (;owner=mesh.rho, field_owner=mesh.efield,
-                            flags=fft_flags, pad, result, rhohat, product, forward, backward)
+                            flags=fft_flags, pad, result, rhohat, product, forward, backward,
+                            corners, octant)
     end
     return mesh._workspace
 end

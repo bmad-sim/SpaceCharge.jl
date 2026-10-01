@@ -49,6 +49,11 @@ the first solve; use `solve!(mesh; fft_flags=FFTW.ESTIMATE)` to reduce setup tim
 for short runs. GPU plans use their backend defaults. FFT setup is amortized by
 repeated solves, so measure both initialization and warmed tracking throughput.
 
+For free space, the integrated field kernel is evaluated in one octant and
+reflected with exact odd/even symmetry. Shifted cathode kernels retain the full
+evaluation. The discretization, CIC weights, gamma factors, and physical field
+crop are unchanged; floating-point rounding can differ.
+
 ## Contributing
 
 Contributions are welcome! Please open issues or pull requests for bug reports, feature requests, or improvements.

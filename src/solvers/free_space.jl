@@ -3,7 +3,7 @@ using AbstractFFTs
 using FFTW
 
 """
-    solve!(mesh::Mesh3D; at_cathode::Bool = false)
+    solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE)
 
 Solves the space charge problem for free-space boundary conditions.
 
@@ -50,7 +50,7 @@ end
     solve_freespace!(mesh::Mesh3D{T, A, B}; offset::NTuple{3, T} = (zero(T), zero(T), zero(T))) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
 
 Optimized free-space solver for computing electric field from charge density.
-Uses pre-allocated workspace arrays, cached in-place FFT plans, and CPU multi-threading for 
+Uses pre-allocated workspace arrays, cached real FFT plans, and CPU multi-threading for 
 optimal performance on both CPU and GPU.
 """
 function solve_freespace!(mesh::Mesh3D{T};
@@ -66,8 +66,12 @@ function _solve_freespace!(mesh::Mesh3D{T}, w, offset) where T
     mul!(w.rhohat, w.forward, w.pad)
     factor = T(FPEI) / T(length(w.pad))
     for comp in 1:3
-        get_green_function!(w.pad, mesh.delta, mesh.gamma, comp;
-                            offset, temp=w.result)
+        if all(iszero, offset)
+            _symmetric_green!(w.pad, mesh, comp, w)
+        else
+            get_green_function!(w.pad, mesh.delta, mesh.gamma, comp;
+                                offset, temp=w.result)
+        end
         mul!(w.product, w.forward, w.pad)
         w.product .*= w.rhohat
         mul!(w.result, w.backward, w.product)
