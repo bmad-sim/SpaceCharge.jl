@@ -28,7 +28,8 @@ function solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE, 
         _solve_freespace!(mesh, _get_workspace(mesh; fft_flags), offset;
                          cache_green, image=true)
     end
-    return nothing
+    # Preserve the original public return value for cathode calls.
+    return at_cathode ? mesh.efield : nothing
 end
 
 """

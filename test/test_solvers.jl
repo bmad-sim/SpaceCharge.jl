@@ -11,7 +11,7 @@ function run_solver_tests()
             solve!(mesh)
             free = copy(mesh.efield)
             for cached in (false, true, true)
-                solve!(mesh; at_cathode=true, cache_green=cached)
+                @test solve!(mesh; at_cathode=true, cache_green=cached) === mesh.efield
                 @test mesh.rho == source
                 scale = maximum(abs, mesh.efield)
                 @test maximum(abs, mesh.efield[:,:,1,1:2]) < 1e-10 * scale
