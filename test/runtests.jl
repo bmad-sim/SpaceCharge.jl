@@ -18,7 +18,7 @@ include("test_mesh.jl")
 include("test_deposition.jl")
 include("test_solvers.jl")
 include("test_interpolation.jl")
-include("test_gpu.jl")
+CUDA_AVAILABLE && include("test_gpu.jl")
 
 # Qualitative tests
 @testset "SpaceCharge.jl" begin

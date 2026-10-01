@@ -1,6 +1,5 @@
 using SpaceCharge
 using Test
-using CUDA
 
 function run_mesh_tests()
     @testset "Mesh3D Constructor" begin

@@ -14,6 +14,6 @@ function __init__()
     FFTW.set_num_threads(Threads.nthreads())
 end
 
-export Mesh3D, deposit!, clear_mesh!, interpolate_field, solve!
+export Mesh3D, deposit!, clear_mesh!, interpolate_field, interpolate_field!, solve!
 
 end # module SpaceCharge
