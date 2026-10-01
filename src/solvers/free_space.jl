@@ -3,18 +3,22 @@ using AbstractFFTs
 using FFTW
 
 """
-    solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE)
+    solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE, cache_green::Bool=true)
 
 Solves the space charge problem for free-space boundary conditions.
 
 # Arguments
 - `mesh`: A `Mesh3D` object containing the charge density and where the fields will be stored.
 - `at_cathode`: A boolean indicating whether to model a cathode at z=0.
+- `cache_green`: Reuse transformed kernels when spacing, gamma, and offset match
+  exactly. Defaults to true; false avoids allocating new spectrum caches.
+- `fft_flags`: CPU FFTW planning flags (default `FFTW.MEASURE`). GPU plans use
+  their backend defaults. Changing CPU FFT thread count also rebuilds plans.
 """
-function solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE)
+function solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE, cache_green::Bool=true)
     # Real charge field
     T = eltype(mesh.rho)
-    solve_freespace!(mesh; offset = (zero(T), zero(T), zero(T)), fft_flags)
+    solve_freespace!(mesh; offset = (zero(T), zero(T), zero(T)), fft_flags, cache_green)
 
     if at_cathode
         # Image charge field shares workspace arrays to avoid redundant allocation
@@ -39,7 +43,7 @@ function solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE)
         offset_z = 2 * mesh.min_bounds[3] + (mesh.max_bounds[3] - mesh.min_bounds[3])
         offset = (zero(T), zero(T), offset_z)
 
-        _solve_freespace!(image_mesh, image_mesh._workspace, offset)
+        _solve_freespace!(image_mesh, image_mesh._workspace, offset; cache_green)
 
         # Superposition of fields
         mesh.efield .+= image_mesh.efield
@@ -54,26 +58,54 @@ Uses pre-allocated workspace arrays, cached real FFT plans, and CPU multi-thread
 optimal performance on both CPU and GPU.
 """
 function solve_freespace!(mesh::Mesh3D{T};
-    offset::NTuple{3,T}=(zero(T),zero(T),zero(T)), fft_flags=FFTW.MEASURE) where T
-    _solve_freespace!(mesh, _get_workspace(mesh; fft_flags), offset)
+    offset::NTuple{3,T}=(zero(T),zero(T),zero(T)), fft_flags=FFTW.MEASURE, cache_green::Bool=true) where T
+    _solve_freespace!(mesh, _get_workspace(mesh; fft_flags), offset; cache_green)
+end
+
+function _green_spectrum!(dest, mesh, w, comp, offset)
+    if all(iszero, offset)
+        _symmetric_green!(w.pad, mesh, comp, w)
+    else
+        get_green_function!(w.pad, mesh.delta, mesh.gamma, comp;
+                            offset, temp=w.result)
+    end
+    mul!(dest, w.forward, w.pad)
+    return dest
+end
+
+function _cached_spectra!(mesh, w, offset)
+    cache = all(iszero, offset) ? w.free_cache : w.image_cache
+    key = (mesh.delta, mesh.gamma, offset)
+    if cache.key != key
+        # Invalidate before rebuilding: a failed transform must never leave a
+        # partially overwritten cache that could be mistaken for a valid one.
+        cache.key = nothing
+        if cache.spectra === nothing
+            cache.spectra = ntuple(_ -> similar(w.product), 3)
+        end
+        for comp in 1:3
+            _green_spectrum!(cache.spectra[comp], mesh, w, comp, offset)
+        end
+        cache.key = key
+    end
+    return cache.spectra
 end
 
 # Function barrier specializes the plans and buffers stored in the mesh.
-function _solve_freespace!(mesh::Mesh3D{T}, w, offset) where T
+function _solve_freespace!(mesh::Mesh3D{T}, w, offset; cache_green=true) where T
     nx, ny, nz = mesh.grid_size
     fill!(w.pad, zero(T))
     @views w.pad[1:nx, 1:ny, 1:nz] .= mesh.rho
     mul!(w.rhohat, w.forward, w.pad)
+    greens = cache_green ? _cached_spectra!(mesh, w, offset) : nothing
     factor = T(FPEI) / T(length(w.pad))
     for comp in 1:3
-        if all(iszero, offset)
-            _symmetric_green!(w.pad, mesh, comp, w)
+        if greens === nothing
+            _green_spectrum!(w.product, mesh, w, comp, offset)
+            w.product .*= w.rhohat
         else
-            get_green_function!(w.pad, mesh.delta, mesh.gamma, comp;
-                                offset, temp=w.result)
+            @. w.product = greens[comp] * w.rhohat
         end
-        mul!(w.product, w.forward, w.pad)
-        w.product .*= w.rhohat
         mul!(w.result, w.backward, w.product)
         @views @. mesh.efield[:,:,:,comp] = factor * w.result[nx:2nx-1,ny:2ny-1,nz:2nz-1]
     end

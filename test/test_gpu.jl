@@ -172,6 +172,14 @@ function run_gpu_tests()
                 for (actual, ref) in zip(outputs, expected)
                     @test Array(actual) ≈ ref rtol=20eps(T)
                 end
+                # Reuse, rebuild, and bypass the device-resident cache.
+                for cached in (true, false, true)
+                    gpu.gamma *= T(1.03)
+                    cpu.gamma = gpu.gamma
+                    solve!(gpu; at_cathode=cathode, cache_green=cached)
+                    copyto!(cpu.efield, Array(gpu.efield))
+                    test_field_against_reference(cpu; at_cathode=cathode)
+                end
             end
         end
         # Test GPU clear_mesh!

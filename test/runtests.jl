@@ -28,6 +28,7 @@ CUDA_AVAILABLE && include("test_gpu.jl")
     run_deposition_tests()
     run_solver_tests()
     run_solver_reference_tests()
+    run_solver_cache_reference_tests()
     run_interpolation_tests()
     
     # GPU tests only if CUDA is available

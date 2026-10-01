@@ -54,6 +54,19 @@ reflected with exact odd/even symmetry. Shifted cathode kernels retain the full
 evaluation. The discretization, CIC weights, gamma factors, and physical field
 crop are unchanged; floating-point rounding can differ.
 
+`solve!` caches the three transformed Green kernels by default. Changes to exact
+grid spacing, gamma, or cathode offset invalidate the relevant cache; changing
+charge values does not. Replacing mesh arrays rebuilds the workspace. Each mesh
+retains at most one free-space and one image cache. Each cache costs three
+half-complex spectra (about 49 MiB for a 64³ Float64 mesh). Use
+`solve!(mesh; cache_green=false)` for a changing mesh or to avoid allocating the
+cache; previously allocated caches remain available for later reuse. Free them
+and the FFT workspace with `mesh._workspace = nothing` if necessary. Translation
+of a free-space mesh alone does not invalidate its kernel; cathode translations
+change the image offset and do invalidate that kernel.
+
+Use one mesh per independently concurrent solve; its scratch and cache are mutable.
+
 ## Contributing
 
 Contributions are welcome! Please open issues or pull requests for bug reports, feature requests, or improvements.

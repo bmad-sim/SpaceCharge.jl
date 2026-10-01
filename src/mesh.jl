@@ -1,5 +1,13 @@
 using AbstractFFTs
 
+# Each mesh owns at most one free-space and one shifted-image spectrum set.
+# The exact key includes every physical parameter used by the kernel builder;
+# array backend, precision, and shape are fixed by the owning FFT workspace.
+mutable struct GreenCache{T,A}
+    key::Union{Nothing,Tuple{NTuple{3,T},T,NTuple{3,T}}}
+    spectra::Union{Nothing,NTuple{3,A}}
+end
+
 """
     Mesh3D{T, A, B}
 
@@ -43,9 +51,10 @@ function _get_workspace(mesh::Mesh3D{T}; fft_flags=FFTW.MEASURE) where T
     n = mesh.grid_size
     size(mesh.rho) == n || throw(DimensionMismatch("rho does not match grid_size"))
     size(mesh.efield) == (n..., 3) || throw(DimensionMismatch("efield does not match grid_size"))
+    fft_threads = get_backend(mesh.rho) isa CPU ? FFTW.get_num_threads() : 0
     w = mesh._workspace
     if w === nothing || w.owner !== mesh.rho || w.field_owner !== mesh.efield ||
-       size(w.pad) != 2 .* n || w.flags != fft_flags
+       size(w.pad) != 2 .* n || w.flags != fft_flags || w.fft_threads != fft_threads
         dims = 2 .* n
         pad = similar(mesh.rho, dims)
         result = similar(pad)
@@ -53,6 +62,8 @@ function _get_workspace(mesh::Mesh3D{T}; fft_flags=FFTW.MEASURE) where T
         product = similar(rhohat)
         corners = similar(mesh.rho, n .+ 1)
         octant = similar(mesh.rho)
+        free_cache = GreenCache{T,typeof(product)}(nothing, nothing)
+        image_cache = GreenCache{T,typeof(product)}(nothing, nothing)
         if get_backend(mesh.rho) isa CPU
             forward = plan_rfft(pad; flags=fft_flags)
             backward = plan_brfft(product, dims[1]; flags=fft_flags)
@@ -61,8 +72,8 @@ function _get_workspace(mesh::Mesh3D{T}; fft_flags=FFTW.MEASURE) where T
             backward = plan_brfft(product, dims[1])
         end
         mesh._workspace = (;owner=mesh.rho, field_owner=mesh.efield,
-                            flags=fft_flags, pad, result, rhohat, product, forward, backward,
-                            corners, octant)
+                            flags=fft_flags, fft_threads, pad, result, rhohat, product, forward, backward,
+                            corners, octant, free_cache, image_cache)
     end
     return mesh._workspace
 end
