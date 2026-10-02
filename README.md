@@ -23,7 +23,7 @@ To install SpaceCharge.jl, open the Julia REPL and run:
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/ndwang/SpaceCharge.jl.git")
+Pkg.add("SpaceCharge")
 ```
 
 ## Getting Started
