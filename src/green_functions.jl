@@ -4,10 +4,10 @@ using KernelAbstractions
     potential_green_function(x, y, z)
 
 The indefinite integral:
-∫∫∫ 1/r dx dy dz = 
-        -z^2*atan(x*y/(z*r))/2 - y^2*atan(x*z/(y*r))/2 -x^2*atan(y*z/(x*r))/2 
+∫∫∫ 1/r dx dy dz =
+        -z^2*atan(x*y/(z*r))/2 - y^2*atan(x*z/(y*r))/2 -x^2*atan(y*z/(x*r))/2
         +y*z*log(x+r) + x*z*log(y+r) + x*y*log(z+r)
-        
+
 This corresponds to the scalar potential.
 """
 @inline function potential_green_function(x, y, z)
@@ -190,4 +190,3 @@ function _symmetric_green!(out, mesh, comp::Integer, work)
     _parity_reflect!(backend)(out, work.octant, n, Int(comp); ndrange = size(out))
     return out
 end
-
