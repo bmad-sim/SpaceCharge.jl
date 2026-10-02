@@ -49,6 +49,17 @@ the first solve; use `solve!(mesh; fft_flags=FFTW.ESTIMATE)` to reduce setup tim
 for short runs. GPU plans use their backend defaults. FFT setup is amortized by
 repeated solves, so measure both initialization and warmed tracking throughput.
 
+CPU solves prune FFT lines that have zero input or discarded output by default.
+The charge transform starts on a compact padded-x buffer; inverse transforms
+retain the existing `n:2n-1` physical slices in each direction, including for
+shifted cathode images. Green-kernel transforms stay full. This preserves the
+direct field operator and adds no symmetry transform or physics approximation.
+Use `solve!(mesh; pruned_fft=false)` to select full transforms when benchmarking
+other grid/thread configurations. GPU continues to use full real transforms.
+Changing this option rebuilds CPU plans and caches. Pruning adds two compact
+real buffers (8 MiB at 64^3 Float64) and extra initial planning work; speedup
+depends on shape and thread count.
+
 For free space, the integrated field kernel is evaluated in one octant and
 reflected with exact odd/even symmetry. Shifted cathode kernels retain the full
 evaluation. The discretization, CIC weights, gamma factors, and physical field

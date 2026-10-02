@@ -1,0 +1,73 @@
+# Exact separable CPU transforms. The charge occupies 1:n in each direction;
+# SpaceCharge retains n:2n-1 of the convolution, NOT the first octant.
+# Kernel transforms remain full: shifted image kernels need no symmetry here.
+function _pruned_plans(n, rhohat::Array{Complex{T},3}, product; flags) where T
+    nx, ny, nz = n
+    xpad = zeros(T, 2nx, ny, nz)
+    result = similar(xpad)
+    # Explicit input/output layouts allow FFTW to write/read the strided views
+    # directly. A public plan_rfft(xpad, 1) assumes a packed output instead.
+    f1 = FFTW.rFFTWPlan{T,FFTW.FORWARD,false,3}(
+        xpad, view(rhohat, :, 1:ny, 1:nz), 1, flags, FFTW.NO_TIMELIMIT)
+    f2 = plan_fft!(view(rhohat, :, :, 1:nz), 2; flags)
+    f3 = plan_fft!(rhohat, 3; flags)
+    b3 = plan_bfft!(product, 3; flags)
+    b2 = plan_bfft!(view(product, :, :, nz:2nz-1), 2; flags)
+    b1 = FFTW.rFFTWPlan{Complex{T},FFTW.BACKWARD,false,3}(
+        view(product, :, ny:2ny-1, nz:2nz-1), result, 1, flags, FFTW.NO_TIMELIMIT)
+    # MEASURE may overwrite its buffers. Charge padding is reset on every call.
+    return (; xpad, result, f1, f2, f3, b3, b2, b1)
+end
+
+function _charge_transform!(mesh, w, ::Nothing, image)
+    nx, ny, nz = mesh.grid_size
+    fill!(w.pad, zero(eltype(w.pad)))
+    if image
+        @views @. w.pad[1:nx, 1:ny, 1:nz] = -mesh.rho[:, :, nz:-1:1]
+    else
+        @views w.pad[1:nx, 1:ny, 1:nz] .= mesh.rho
+    end
+    mul!(w.rhohat, w.forward, w.pad)
+    return nothing
+end
+
+function _charge_transform!(mesh, w, p, image)
+    nx, ny, nz = mesh.grid_size
+    fill!(p.xpad, zero(eltype(p.xpad)))
+    if image
+        @views @. p.xpad[1:nx, :, :] = -mesh.rho[:, :, nz:-1:1]
+    else
+        @views p.xpad[1:nx, :, :] .= mesh.rho
+    end
+    c = w.rhohat
+    mul!(view(c, :, 1:ny, 1:nz), p.f1, p.xpad)
+    @views fill!(c[:, ny+1:2ny, 1:nz], zero(eltype(c)))
+    p.f2 * view(c, :, :, 1:nz)
+    @views fill!(c[:, :, nz+1:2nz], zero(eltype(c)))
+    p.f3 * c
+    return nothing
+end
+
+function _field_inverse!(mesh, w, ::Nothing, comp, factor, image)
+    nx, ny, nz = mesh.grid_size
+    mul!(w.result, w.backward, w.product)
+    _store_field!(mesh, view(w.result, nx:2nx-1, ny:2ny-1, nz:2nz-1), comp, factor, image)
+end
+
+function _field_inverse!(mesh, w, p, comp, factor, image)
+    nx, ny, nz = mesh.grid_size
+    p.b3 * w.product
+    p.b2 * view(w.product, :, :, nz:2nz-1)
+    mul!(p.result, p.b1, view(w.product, :, ny:2ny-1, nz:2nz-1))
+    # y/z have already been cropped; x is still the complete real inverse.
+    _store_field!(mesh, view(p.result, nx:2nx-1, :, :), comp, factor, image)
+end
+
+function _store_field!(mesh, field, comp, factor, image)
+    if image
+        @views @. mesh.efield[:, :, :, comp] += factor * field
+    else
+        @views @. mesh.efield[:, :, :, comp] = factor * field
+    end
+    return nothing
+end

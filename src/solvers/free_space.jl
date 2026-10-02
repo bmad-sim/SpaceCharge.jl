@@ -3,7 +3,7 @@ using AbstractFFTs
 using FFTW
 
 """
-    solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE, cache_green::Bool=true)
+    solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE, cache_green::Bool=true, pruned_fft::Bool=true)
 
 Solves the space charge problem for free-space boundary conditions.
 
@@ -12,20 +12,22 @@ Solves the space charge problem for free-space boundary conditions.
 - `at_cathode`: A boolean indicating whether to model a cathode at z=0.
 - `cache_green`: Reuse transformed kernels when spacing, gamma, and offset match
   exactly. Defaults to true; false avoids allocating new spectrum caches.
+- `pruned_fft`: Skip zero-input and discarded-output CPU FFT lines (default true).
+  Set false for full transforms. GPU always uses full transforms.
 - `fft_flags`: CPU FFTW planning flags (default `FFTW.MEASURE`). GPU plans use
   their backend defaults. Changing CPU FFT thread count also rebuilds plans.
 """
-function solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE, cache_green::Bool=true)
+function solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE, cache_green::Bool=true, pruned_fft::Bool=true)
     # Real charge field
     T = eltype(mesh.rho)
-    solve_freespace!(mesh; offset = (zero(T), zero(T), zero(T)), fft_flags, cache_green)
+    solve_freespace!(mesh; offset = (zero(T), zero(T), zero(T)), fft_flags, cache_green, pruned_fft)
 
     if at_cathode
         # Image charge at -z: reverse and negate directly into the FFT input.
         # Accumulate each component into the real field without an image mesh.
         offset_z = 2 * mesh.min_bounds[3] + (mesh.max_bounds[3] - mesh.min_bounds[3])
         offset = (zero(T), zero(T), offset_z)
-        _solve_freespace!(mesh, _get_workspace(mesh; fft_flags), offset;
+        _solve_freespace!(mesh, _get_workspace(mesh; fft_flags, pruned_fft), offset;
                          cache_green, image=true)
     end
     # Preserve the original public return value for cathode calls.
@@ -40,8 +42,8 @@ Uses pre-allocated workspace arrays, cached real FFT plans, and CPU multi-thread
 optimal performance on both CPU and GPU.
 """
 function solve_freespace!(mesh::Mesh3D{T};
-    offset::NTuple{3,T}=(zero(T),zero(T),zero(T)), fft_flags=FFTW.MEASURE, cache_green::Bool=true) where T
-    _solve_freespace!(mesh, _get_workspace(mesh; fft_flags), offset; cache_green)
+    offset::NTuple{3,T}=(zero(T),zero(T),zero(T)), fft_flags=FFTW.MEASURE, cache_green::Bool=true, pruned_fft::Bool=true) where T
+    _solve_freespace!(mesh, _get_workspace(mesh; fft_flags, pruned_fft), offset; cache_green)
 end
 
 function _green_spectrum!(dest, mesh, w, comp, offset)
@@ -76,13 +78,7 @@ end
 # Function barrier specializes the plans and buffers stored in the mesh.
 function _solve_freespace!(mesh::Mesh3D{T}, w, offset; cache_green=true, image=false) where T
     nx, ny, nz = mesh.grid_size
-    fill!(w.pad, zero(T))
-    if image
-        @views @. w.pad[1:nx, 1:ny, 1:nz] = -mesh.rho[:, :, nz:-1:1]
-    else
-        @views w.pad[1:nx, 1:ny, 1:nz] .= mesh.rho
-    end
-    mul!(w.rhohat, w.forward, w.pad)
+    _charge_transform!(mesh, w, w.pruned, image)
     greens = cache_green ? _cached_spectra!(mesh, w, offset) : nothing
     factor = T(FPEI) / T(length(w.pad))
     for comp in 1:3
@@ -92,12 +88,7 @@ function _solve_freespace!(mesh::Mesh3D{T}, w, offset; cache_green=true, image=f
         else
             @. w.product = greens[comp] * w.rhohat
         end
-        mul!(w.result, w.backward, w.product)
-        if image
-            @views @. mesh.efield[:,:,:,comp] += factor * w.result[nx:2nx-1,ny:2ny-1,nz:2nz-1]
-        else
-            @views @. mesh.efield[:,:,:,comp] = factor * w.result[nx:2nx-1,ny:2ny-1,nz:2nz-1]
-        end
+        _field_inverse!(mesh, w, w.pruned, comp, factor, image)
     end
     return nothing
 end

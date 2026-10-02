@@ -9,6 +9,7 @@ include("mesh.jl")
 include("deposition.jl")
 include("interpolation.jl")
 include("green_functions.jl")
+include("solvers/pruned_fft.jl")
 include("solvers/free_space.jl")
 
 function __init__()
