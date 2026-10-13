@@ -1,7 +1,7 @@
 name = "SpaceCharge"
 uuid = "886cafed-6ce3-46b8-9147-fe45a2210a4b"
 authors = ["Ningdong Wang <ndwang3@gmail.com>", "Eiad Hamwi <eh652@cornell.edu>", "Tianyu Huang <thuang23@u.rochester.edu>"]
-version = "1.2.0"
+version = "1.3.0"
 
 [deps]
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"

@@ -2,3 +2,4 @@ statprof/
 .claude/
 .cursor/
 .cursorrules
+/Manifest.toml
