@@ -3,99 +3,92 @@ using AbstractFFTs
 using FFTW
 
 """
-    solve!(mesh::Mesh3D; at_cathode::Bool = false)
+    solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE, cache_green::Bool=true, pruned_fft::Bool=true)
 
 Solves the space charge problem for free-space boundary conditions.
 
 # Arguments
 - `mesh`: A `Mesh3D` object containing the charge density and where the fields will be stored.
 - `at_cathode`: A boolean indicating whether to model a cathode at z=0.
+- `cache_green`: Reuse transformed kernels when spacing, gamma, and offset match
+  exactly. Defaults to true; false avoids allocating new spectrum caches.
+- `pruned_fft`: Skip zero-input and discarded-output CPU FFT lines (default true).
+  Set false for full transforms. GPU always uses full transforms.
+- `fft_flags`: CPU FFTW planning flags (default `FFTW.MEASURE`). GPU plans use
+  their backend defaults. Changing CPU FFT thread count also rebuilds plans.
 """
-function solve!(mesh::Mesh3D; at_cathode::Bool = false)
+function solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE, cache_green::Bool=true, pruned_fft::Bool=true)
     # Real charge field
     T = eltype(mesh.rho)
-    solve_freespace!(mesh, offset = (zero(T), zero(T), zero(T)))
+    solve_freespace!(mesh; offset = (zero(T), zero(T), zero(T)), fft_flags, cache_green, pruned_fft)
 
     if at_cathode
-        # Image charge field shares workspace arrays to avoid redundant allocation
-        AT = typeof(mesh.rho)
-        BT = typeof(mesh.efield)
-        image_mesh = Mesh3D{T, AT, BT}(
-            mesh.grid_size,
-            mesh.min_bounds,
-            mesh.max_bounds,
-            mesh.delta,
-            mesh.gamma,
-            mesh.total_charge,
-            similar(mesh.rho),
-            similar(mesh.efield),
-            nothing,
-        )
-        image_mesh.rho .= -mesh.rho[:, :, end:-1:1]
-        image_mesh._workspace = _get_workspace(mesh)
-
-        # Image charge offset for cathode at z=0:
-        # Real charge at z, image charge at -z, distance = 2z
+        # Image charge at -z: reverse and negate directly into the FFT input.
+        # Accumulate each component into the real field without an image mesh.
         offset_z = 2 * mesh.min_bounds[3] + (mesh.max_bounds[3] - mesh.min_bounds[3])
         offset = (zero(T), zero(T), offset_z)
-
-        solve_freespace!(image_mesh, offset = offset)
-
-        # Superposition of fields
-        mesh.efield .+= image_mesh.efield
+        _solve_freespace!(mesh, _get_workspace(mesh; fft_flags, pruned_fft), offset;
+                         cache_green, image=true)
     end
+    # Preserve the original public return value for cathode calls.
+    return at_cathode ? mesh.efield : nothing
 end
 
 """
     solve_freespace!(mesh::Mesh3D{T, A, B}; offset::NTuple{3, T} = (zero(T), zero(T), zero(T))) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
 
 Optimized free-space solver for computing electric field from charge density.
-Uses pre-allocated workspace arrays, cached in-place FFT plans, and CPU multi-threading for 
+Uses pre-allocated workspace arrays, cached real FFT plans, and CPU multi-threading for
 optimal performance on both CPU and GPU.
 """
-function solve_freespace!(mesh::Mesh3D{T, A, B}; offset::NTuple{3, T} = (zero(T), zero(T), zero(T))) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
-    nx, ny, nz = mesh.grid_size
+function solve_freespace!(mesh::Mesh3D{T};
+    offset::NTuple{3,T}=(zero(T),zero(T),zero(T)), fft_flags=FFTW.MEASURE, cache_green::Bool=true, pruned_fft::Bool=true) where T
+    _solve_freespace!(mesh, _get_workspace(mesh; fft_flags, pruned_fft), offset; cache_green)
+end
 
-    # Get pre-allocated workspace (lazy initialization)
-    workspace = _get_workspace(mesh)
-    crho = workspace.crho
-    cgrn = workspace.cgrn
-    temp_result = workspace.temp_result
-    fft_plan_inplace = workspace.fft_plan_inplace
-    ifft_plan_inplace = workspace.ifft_plan_inplace
-
-    # Clear and setup charge density array
-    fill!(crho, zero(eltype(crho)))
-    crho[1:nx, 1:ny, 1:nz] .= mesh.rho
-
-    # In-place FFT of charge density
-    fft_plan_inplace * crho
-
-    # Normalization factor: 1/(4 pi eps0)
-    factr = T(FPEI)
-
-    for icomp = 1:3
-        # Get Green's function (reuse cgrn array, temp_result as scratch for differencing)
-        get_green_function!(
-            cgrn,
-            mesh.delta,
-            mesh.gamma,
-            icomp,
-            offset = offset,
-            temp = temp_result,
-        )
-
-        # In-place FFT of Green's function
-        fft_plan_inplace * cgrn
-
-        # Convolution (vectorized operation)
-        @. temp_result = crho * cgrn
-
-        # In-place inverse FFT
-        ifft_plan_inplace * temp_result
-
-        # Extract field using optimized slicing
-        ishift, jshift, kshift = nx - 1, ny - 1, nz - 1
-        @views @. mesh.efield[:, :, :, icomp] = factr * real(temp_result[1+ishift:nx+ishift, 1+jshift:ny+jshift, 1+kshift:nz+kshift])
+function _green_spectrum!(dest, mesh, w, comp, offset)
+    if all(iszero, offset)
+        _symmetric_green!(w.pad, mesh, comp, w)
+    else
+        get_green_function!(w.pad, mesh.delta, mesh.gamma, comp;
+                            offset, temp=w.result)
     end
+    mul!(dest, w.forward, w.pad)
+    return dest
+end
+
+function _cached_spectra!(mesh, w, offset)
+    cache = all(iszero, offset) ? w.free_cache : w.image_cache
+    key = (mesh.delta, mesh.gamma, offset)
+    if cache.key != key
+        # Invalidate before rebuilding: a failed transform must never leave a
+        # partially overwritten cache that could be mistaken for a valid one.
+        cache.key = nothing
+        if cache.spectra === nothing
+            cache.spectra = ntuple(_ -> similar(w.product), 3)
+        end
+        for comp in 1:3
+            _green_spectrum!(cache.spectra[comp], mesh, w, comp, offset)
+        end
+        cache.key = key
+    end
+    return cache.spectra
+end
+
+# Function barrier specializes the plans and buffers stored in the mesh.
+function _solve_freespace!(mesh::Mesh3D{T}, w, offset; cache_green=true, image=false) where T
+    nx, ny, nz = mesh.grid_size
+    _charge_transform!(mesh, w, w.pruned, image)
+    greens = cache_green ? _cached_spectra!(mesh, w, offset) : nothing
+    factor = T(FPEI) / T(length(w.pad))
+    for comp in 1:3
+        if greens === nothing
+            _green_spectrum!(w.product, mesh, w, comp, offset)
+            w.product .*= w.rhohat
+        else
+            @. w.product = greens[comp] * w.rhohat
+        end
+        _field_inverse!(mesh, w, w.pruned, comp, factor, image)
+    end
+    return nothing
 end

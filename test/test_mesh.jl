@@ -1,6 +1,5 @@
 using SpaceCharge
 using Test
-using CUDA
 
 function run_mesh_tests()
     @testset "Mesh3D Constructor" begin
@@ -10,7 +9,7 @@ function run_mesh_tests()
             particles_x = [-1.0, 1.0]
             particles_y = [-2.0, 2.0]
             particles_z = [-3.0, 3.0]
-            
+
             mesh = Mesh3D(grid_size, particles_x, particles_y, particles_z)
 
             @test mesh.grid_size == grid_size
@@ -18,7 +17,7 @@ function run_mesh_tests()
             @test typeof(mesh.rho) == Array{Float64, 3}
             @test size(mesh.rho) == grid_size
             @test size(mesh.efield) == (grid_size..., 3)
-            
+
             # Check that bounds contain all particles with padding
             @test mesh.min_bounds[1] < minimum(particles_x)
             @test mesh.max_bounds[1] > maximum(particles_x)
@@ -26,7 +25,7 @@ function run_mesh_tests()
             @test mesh.max_bounds[2] > maximum(particles_y)
             @test mesh.min_bounds[3] < minimum(particles_z)
             @test mesh.max_bounds[3] > maximum(particles_z)
-            
+
             # Check delta calculation
             @test mesh.delta[1] ≈ (mesh.max_bounds[1] - mesh.min_bounds[1]) / (grid_size[1] - 1)
             @test mesh.delta[2] ≈ (mesh.max_bounds[2] - mesh.min_bounds[2]) / (grid_size[2] - 1)
@@ -58,11 +57,11 @@ function run_mesh_tests()
             particles_x = [0.0]
             particles_y = [0.0]
             particles_z = [0.0]
-            
+
             mesh_float32 = Mesh3D(grid_size, particles_x, particles_y, particles_z; T=Float32)
             @test eltype(mesh_float32.rho) == Float32
             @test eltype(mesh_float32.efield) == Float32
-            
+
             if CUDA_AVAILABLE
                 mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z;
                                  T=Float32, backend=CUDABackend())
@@ -99,12 +98,12 @@ function run_mesh_tests()
             particles_x = [0.0]
             particles_y = [0.0]
             particles_z = [0.0]
-            
-            mesh = Mesh3D(grid_size, particles_x, particles_y, particles_z; 
+
+            mesh = Mesh3D(grid_size, particles_x, particles_y, particles_z;
                          gamma=2.0, total_charge=1.0)
-            
+
             @test mesh.gamma == 2.0
             @test mesh.total_charge == 1.0
         end
     end
-end 
+end

@@ -16,16 +16,23 @@ end
 # Include individual test modules
 include("test_mesh.jl")
 include("test_deposition.jl")
+include("test_threaded_deposition.jl")
 include("test_solvers.jl")
+include("test_solver_reference.jl")
+include("test_pruned_fft.jl")
 include("test_interpolation.jl")
-include("test_gpu.jl")
+CUDA_AVAILABLE && include("test_gpu.jl")
 
 # Qualitative tests
 @testset "SpaceCharge.jl" begin
     # Run all test modules
     run_mesh_tests()
     run_deposition_tests()
+    run_threaded_deposition_tests()
     run_solver_tests()
+    run_solver_reference_tests()
+    run_pruned_fft_tests()
+    run_solver_cache_reference_tests()
     run_interpolation_tests()
     
     # GPU tests only if CUDA is available

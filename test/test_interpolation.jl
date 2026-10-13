@@ -3,6 +3,50 @@ using Test
 
 function run_interpolation_tests()
     @testset "Interpolation" begin
+        @testset "Preallocated linear field ($T)" for T in (Float32, Float64)
+            grid_size = (5, 6, 7)
+            mesh = Mesh3D(grid_size, (-2.0, -3.0, -4.0), (2.0, 3.0, 4.0); T=T)
+            field(x, y, z) = (2x - 3y + z + 1, -x + 4y + 2z - 2, 3x + y - 2z + 3)
+            for k in 1:grid_size[3], j in 1:grid_size[2], i in 1:grid_size[1]
+                x = mesh.min_bounds[1] + (i - 1) * mesh.delta[1]
+                y = mesh.min_bounds[2] + (j - 1) * mesh.delta[2]
+                z = mesh.min_bounds[3] + (k - 1) * mesh.delta[3]
+                mesh.efield[i, j, k, :] .= field(x, y, z)
+            end
+            x = T[-2, -0.7, 1.4]
+            y = T[-3, 0.2, 2.1]
+            z = T[-4, 0.4, 3.1]
+            outputs = (fill(T(NaN), 3), fill(T(NaN), 3), fill(T(NaN), 3))
+            returned = interpolate_field!(outputs..., mesh, x, y, z)
+            @test all(returned[i] === outputs[i] for i in 1:3)
+            expected = field.(x, y, z)
+            for component in 1:3
+                @test outputs[component] ≈ getindex.(expected, component) rtol=10eps(T) atol=10eps(T)
+            end
+            allocating = interpolate_field(mesh, x, y, z)
+            @test all(allocating[i] == outputs[i] for i in 1:3)
+
+            # Reusing the buffers must overwrite their old values completely.
+            mesh.efield .*= 2
+            interpolate_field!(outputs..., mesh, x, y, z)
+            for component in 1:3
+                @test outputs[component] ≈ 2 .* getindex.(expected, component) rtol=10eps(T) atol=10eps(T)
+            end
+
+            # Reject mismatched inputs and outputs before entering the kernel.
+            arrays = (outputs..., x, y, z)
+            for shortened in 1:6
+                args = ntuple(i -> i == shortened ? arrays[i][1:2] : arrays[i], 6)
+                @test_throws DimensionMismatch interpolate_field!(args[1:3]..., mesh, args[4:6]...)
+            end
+            @test_throws DimensionMismatch interpolate_field(mesh, x, y[1:2], z)
+
+            empty_outputs = (T[], T[], T[])
+            empty_result = interpolate_field!(empty_outputs..., mesh, T[], T[], T[])
+            @test all(empty_result[i] === empty_outputs[i] for i in 1:3)
+            @test all(isempty, interpolate_field(mesh, T[], T[], T[]))
+        end
+
         # Test basic interpolation
         @testset "Basic Interpolation" begin
             grid_size = (4, 4, 4)
@@ -105,10 +149,12 @@ function run_interpolation_tests()
             @test all(isfinite.(Ey))
             @test all(isfinite.(Ez))
             
-            # For a central charge, fields at the center should be large
-            @test abs(Ex[1]) > 1e7
-            @test abs(Ey[1]) > 1e7
-            @test abs(Ez[1]) > 1e7
+            # A charge has zero self-field. Scale roundoff by the mesh field,
+            # not an absolute threshold (this test uses a micron-sized cell).
+            scale = maximum(abs, mesh.efield)
+            @test abs(Ex[1]) < 1e-10 * scale
+            @test abs(Ey[1]) < 1e-10 * scale
+            @test abs(Ez[1]) < 1e-10 * scale
         end
 
         # Test interpolation edge cases
@@ -132,4 +178,4 @@ function run_interpolation_tests()
             @test all(Ez .≈ 1.0)
         end
     end
-end 
+end

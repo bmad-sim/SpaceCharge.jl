@@ -103,14 +103,46 @@ function interpolate_field(
     particles_y,
     particles_z,
 ) where {T, A, B}
-    backend = get_backend(mesh.rho)
-    kernel! = interpolate_kernel!(backend)
-
-    num_particles = length(particles_x)
     Ex = similar(particles_x)
     Ey = similar(particles_x)
     Ez = similar(particles_x)
 
+    return interpolate_field!(Ex, Ey, Ez, mesh, particles_x, particles_y, particles_z)
+end
+
+"""
+    interpolate_field!(Ex, Ey, Ez, mesh, particles_x, particles_y, particles_z)
+
+Interpolate the electric field into existing particle field arrays and return
+`(Ex, Ey, Ez)`. Reuse these arrays across calls to avoid allocating three output
+arrays per interpolation.
+
+All six particle arrays must have the same length and reside on the same backend
+as `mesh`. Output arrays must not overlap each other or the input arrays. As with
+[`interpolate_field`](@ref), each particle must be inside a valid grid cell.
+Empty arrays are accepted without launching a kernel.
+
+GPU execution follows the backend's asynchronous execution semantics. Synchronize
+the backend before accessing results from the host or another execution stream.
+"""
+function interpolate_field!(
+    Ex,
+    Ey,
+    Ez,
+    mesh::Mesh3D,
+    particles_x,
+    particles_y,
+    particles_z,
+)
+    num_particles = length(particles_x)
+    if !(length(particles_y) == length(particles_z) ==
+         length(Ex) == length(Ey) == length(Ez) == num_particles)
+        throw(DimensionMismatch("Particle coordinate and field arrays must have the same length."))
+    end
+    num_particles == 0 && return (Ex, Ey, Ez)
+
+    backend = get_backend(mesh.rho)
+    kernel! = interpolate_kernel!(backend)
     kernel!(
         Ex,
         Ey,
