@@ -5,6 +5,7 @@ using FFTW
 using LinearAlgebra: mul!
 
 include("utils.jl")
+include("interface.jl")
 include("mesh.jl")
 include("deposition.jl")
 include("interpolation.jl")
@@ -16,6 +17,6 @@ function __init__()
     FFTW.set_num_threads(Threads.nthreads())
 end
 
-export Mesh3D, deposit!, clear_mesh!, interpolate_field, interpolate_field!, solve!
+export Mesh3D, deposit!, clear_mesh!, interpolate_field, interpolate_field!, solve!, field!
 
 end # module SpaceCharge

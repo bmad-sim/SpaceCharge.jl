@@ -14,6 +14,7 @@ catch
 end
 
 # Include individual test modules
+include("test_shared_api.jl")
 include("test_mesh.jl")
 include("test_deposition.jl")
 include("test_threaded_deposition.jl")
@@ -26,6 +27,7 @@ CUDA_AVAILABLE && include("test_gpu.jl")
 # Qualitative tests
 @testset "SpaceCharge.jl" begin
     # Run all test modules
+    run_shared_api_tests()
     run_mesh_tests()
     run_deposition_tests()
     run_threaded_deposition_tests()
