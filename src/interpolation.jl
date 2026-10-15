@@ -1,19 +1,6 @@
 using KernelAbstractions
 
-"""
-    interpolate_kernel!(Ex, Ey, Ez, efield, particles_x, particles_y, particles_z, min_bounds, delta)
-
-A kernel for interpolating the electric field from the grid to particle positions.
-
-This kernel is designed to be run on either a CPU or a GPU using `KernelAbstractions.jl`.
-
-# Arguments
-- `Ex`, `Ey`, `Ez`: 1D arrays to store the interpolated electric field components.
-- `efield`: A 4D array representing the electric field on the grid.
-- `particles_x`, `particles_y`, `particles_z`: 1D arrays of particle coordinates.
-- `min_bounds`: A tuple or vector containing the minimum coordinates of the grid boundaries.
-- `delta`: A tuple or vector containing the grid spacing in each dimension.
-"""
+# Read-only gather: masks, finite/domain checks and output overwrite share a pass.
 @kernel function interpolate_kernel!(
     Ex,
     Ey,
@@ -23,138 +10,69 @@ This kernel is designed to be run on either a CPU or a GPU using `KernelAbstract
     particles_y,
     particles_z,
     min_bounds,
-    delta,
+    inv_delta,
+    max_bounds,
+    active,
+    zero_field,
 )
     i = @index(Global, Linear)
 
-    # --- 1. Find the particle's normalized coordinates ---
-    norm_x = (particles_x[i] - min_bounds[1]) / delta[1]
-    norm_y = (particles_y[i] - min_bounds[2]) / delta[2]
-    norm_z = (particles_z[i] - min_bounds[3]) / delta[3]
+    if !_active(active, i)
+        Ex[i] = Ey[i] = Ez[i] = zero(eltype(Ex))
+    else
+        @inbounds x, y, z = particles_x[i], particles_y[i], particles_z[i]
+        if zero_field isa Val{true}
+            isfinite(x) && isfinite(y) && isfinite(z) || error("active target must be finite")
+            Ex[i] = Ey[i] = Ez[i] = zero(eltype(Ex))
+        else
+            _inside(x, y, z, min_bounds, max_bounds) || error("target outside the FFT bounds")
+            ix, dx = _cell(x, min_bounds[1], inv_delta[1], size(efield, 1))
+            iy, dy = _cell(y, min_bounds[2], inv_delta[2], size(efield, 2))
+            iz, dz = _cell(z, min_bounds[3], inv_delta[3], size(efield, 3))
 
-    # --- 2. Find the index of the lower-left-front grid cell ---
-    ix = floor(Int, norm_x)
-    iy = floor(Int, norm_y)
-    iz = floor(Int, norm_z)
+            @inbounds begin
+                # --- 4. Calculate the trilinear weighting factors ---
+                w_000 = (1 - dx) * (1 - dy) * (1 - dz)
+                w_100 = dx * (1 - dy) * (1 - dz)
+                w_010 = (1 - dx) * dy * (1 - dz)
+                w_110 = dx * dy * (1 - dz)
+                w_001 = (1 - dx) * (1 - dy) * dz
+                w_101 = dx * (1 - dy) * dz
+                w_011 = (1 - dx) * dy * dz
+                w_111 = dx * dy * dz
 
-    # --- 3. Calculate the particle's position within its cell ---
-    dx = norm_x - ix
-    dy = norm_y - iy
-    dz = norm_z - iz
-
-    # --- 4. Calculate the trilinear weighting factors ---
-    w_000 = (1 - dx) * (1 - dy) * (1 - dz)
-    w_100 = dx * (1 - dy) * (1 - dz)
-    w_010 = (1 - dx) * dy * (1 - dz)
-    w_110 = dx * dy * (1 - dz)
-    w_001 = (1 - dx) * (1 - dy) * dz
-    w_101 = dx * (1 - dy) * dz
-    w_011 = (1 - dx) * dy * dz
-    w_111 = dx * dy * dz
-
-    # --- 5. Interpolate the fields ---
-    Ex[i] = (
-        efield[ix + 1, iy + 1, iz + 1, 1] * w_000 +
-        efield[ix + 2, iy + 1, iz + 1, 1] * w_100 +
-        efield[ix + 1, iy + 2, iz + 1, 1] * w_010 +
-        efield[ix + 2, iy + 2, iz + 1, 1] * w_110 +
-        efield[ix + 1, iy + 1, iz + 2, 1] * w_001 +
-        efield[ix + 2, iy + 1, iz + 2, 1] * w_101 +
-        efield[ix + 1, iy + 2, iz + 2, 1] * w_011 +
-        efield[ix + 2, iy + 2, iz + 2, 1] * w_111
-    )
-    Ey[i] = (
-        efield[ix + 1, iy + 1, iz + 1, 2] * w_000 +
-        efield[ix + 2, iy + 1, iz + 1, 2] * w_100 +
-        efield[ix + 1, iy + 2, iz + 1, 2] * w_010 +
-        efield[ix + 2, iy + 2, iz + 1, 2] * w_110 +
-        efield[ix + 1, iy + 1, iz + 2, 2] * w_001 +
-        efield[ix + 2, iy + 1, iz + 2, 2] * w_101 +
-        efield[ix + 1, iy + 2, iz + 2, 2] * w_011 +
-        efield[ix + 2, iy + 2, iz + 2, 2] * w_111
-    )
-    Ez[i] = (
-        efield[ix + 1, iy + 1, iz + 1, 3] * w_000 +
-        efield[ix + 2, iy + 1, iz + 1, 3] * w_100 +
-        efield[ix + 1, iy + 2, iz + 1, 3] * w_010 +
-        efield[ix + 2, iy + 2, iz + 1, 3] * w_110 +
-        efield[ix + 1, iy + 1, iz + 2, 3] * w_001 +
-        efield[ix + 2, iy + 1, iz + 2, 3] * w_101 +
-        efield[ix + 1, iy + 2, iz + 2, 3] * w_011 +
-        efield[ix + 2, iy + 2, iz + 2, 3] * w_111
-    )
-end
-
-"""
-    interpolate_field(mesh, particles_x, particles_y, particles_z)
-
-Interpolate the electric field from the grid to particle positions.
-
-# Arguments
-- `mesh`: A `Mesh3D` object.
-- `particles_x`, `particles_y`, `particles_z`: 1D arrays of particle coordinates.
-
-# Returns
-- A tuple containing three 1D arrays: `(Ex, Ey, Ez)`.
-"""
-function interpolate_field(
-    mesh::Mesh3D{T, A, B},
-    particles_x,
-    particles_y,
-    particles_z,
-) where {T, A, B}
-    Ex = similar(particles_x)
-    Ey = similar(particles_x)
-    Ez = similar(particles_x)
-
-    return interpolate_field!(Ex, Ey, Ez, mesh, particles_x, particles_y, particles_z)
-end
-
-"""
-    interpolate_field!(Ex, Ey, Ez, mesh, particles_x, particles_y, particles_z)
-
-Interpolate the electric field into existing particle field arrays and return
-`(Ex, Ey, Ez)`. Reuse these arrays across calls to avoid allocating three output
-arrays per interpolation.
-
-All six particle arrays must have the same length and reside on the same backend
-as `mesh`. Output arrays must not overlap each other or the input arrays. As with
-[`interpolate_field`](@ref), each particle must be inside a valid grid cell.
-Empty arrays are accepted without launching a kernel.
-
-GPU execution follows the backend's asynchronous execution semantics. Synchronize
-the backend before accessing results from the host or another execution stream.
-"""
-function interpolate_field!(
-    Ex,
-    Ey,
-    Ez,
-    mesh::Mesh3D,
-    particles_x,
-    particles_y,
-    particles_z,
-)
-    num_particles = length(particles_x)
-    if !(length(particles_y) == length(particles_z) ==
-         length(Ex) == length(Ey) == length(Ez) == num_particles)
-        throw(DimensionMismatch("Particle coordinate and field arrays must have the same length."))
+                # --- 5. Interpolate the fields ---
+                Ex[i] = (
+                    efield[ix + 1, iy + 1, iz + 1, 1] * w_000 +
+                    efield[ix + 2, iy + 1, iz + 1, 1] * w_100 +
+                    efield[ix + 1, iy + 2, iz + 1, 1] * w_010 +
+                    efield[ix + 2, iy + 2, iz + 1, 1] * w_110 +
+                    efield[ix + 1, iy + 1, iz + 2, 1] * w_001 +
+                    efield[ix + 2, iy + 1, iz + 2, 1] * w_101 +
+                    efield[ix + 1, iy + 2, iz + 2, 1] * w_011 +
+                    efield[ix + 2, iy + 2, iz + 2, 1] * w_111
+                )
+                Ey[i] = (
+                    efield[ix + 1, iy + 1, iz + 1, 2] * w_000 +
+                    efield[ix + 2, iy + 1, iz + 1, 2] * w_100 +
+                    efield[ix + 1, iy + 2, iz + 1, 2] * w_010 +
+                    efield[ix + 2, iy + 2, iz + 1, 2] * w_110 +
+                    efield[ix + 1, iy + 1, iz + 2, 2] * w_001 +
+                    efield[ix + 2, iy + 1, iz + 2, 2] * w_101 +
+                    efield[ix + 1, iy + 2, iz + 2, 2] * w_011 +
+                    efield[ix + 2, iy + 2, iz + 2, 2] * w_111
+                )
+                Ez[i] = (
+                    efield[ix + 1, iy + 1, iz + 1, 3] * w_000 +
+                    efield[ix + 2, iy + 1, iz + 1, 3] * w_100 +
+                    efield[ix + 1, iy + 2, iz + 1, 3] * w_010 +
+                    efield[ix + 2, iy + 2, iz + 1, 3] * w_110 +
+                    efield[ix + 1, iy + 1, iz + 2, 3] * w_001 +
+                    efield[ix + 2, iy + 1, iz + 2, 3] * w_101 +
+                    efield[ix + 1, iy + 2, iz + 2, 3] * w_011 +
+                    efield[ix + 2, iy + 2, iz + 2, 3] * w_111
+                )
+            end
+        end
     end
-    num_particles == 0 && return (Ex, Ey, Ez)
-
-    backend = get_backend(mesh.rho)
-    kernel! = interpolate_kernel!(backend)
-    kernel!(
-        Ex,
-        Ey,
-        Ez,
-        mesh.efield,
-        particles_x,
-        particles_y,
-        particles_z,
-        mesh.min_bounds,
-        mesh.delta,
-        ndrange=num_particles,
-    )
-
-    return Ex, Ey, Ez
 end

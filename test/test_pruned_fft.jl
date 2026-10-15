@@ -45,9 +45,9 @@ function run_pruned_fft_tests()
                 pruned.rho .= full.rho
                 pruned.min_bounds = full.min_bounds
                 pruned.max_bounds = full.max_bounds
-                a = solve!(full; at_cathode=cathode,cache_green=state!=:refresh,pruned_fft=false)
-                b = solve!(pruned; at_cathode=cathode,cache_green=state!=:refresh,pruned_fft=true)
-                @test cathode ? b === pruned.efield : b === nothing
+                a = SpaceCharge._solve_mesh!(full; at_cathode=cathode,cache_green=state!=:refresh,pruned_fft=false)
+                b = SpaceCharge._solve_mesh!(pruned; at_cathode=cathode,cache_green=state!=:refresh,pruned_fft=true)
+                @test b === nothing
                 for c in 1:3
                     @test pruned.efield[:,:,:,c] ≈ full.efield[:,:,:,c] rtol=tol
                 end
@@ -56,26 +56,31 @@ function run_pruned_fft_tests()
         end
         @testset "Workspace mode and planning changes" begin
             mesh = reference_test_mesh(Float64,(4,5,6),10.)
-            solve!(mesh;pruned_fft=true)
+            SpaceCharge._solve_mesh!(mesh;pruned_fft=true)
             expected = copy(mesh.efield)
             first = mesh._workspace
-            solve!(mesh;pruned_fft=false)
+            SpaceCharge._solve_mesh!(mesh;pruned_fft=false)
             @test mesh._workspace !== first
             @test mesh._workspace.pruned === nothing
             @test mesh.efield ≈ expected rtol=2e-13
-            solve!(mesh;pruned_fft=true,fft_flags=FFTW.ESTIMATE)
+            SpaceCharge._solve_mesh!(mesh;pruned_fft=true,fft_flags=FFTW.ESTIMATE)
             @test mesh._workspace.pruned !== nothing
             @test mesh.efield ≈ expected rtol=2e-13
             mesh.rho = copy(mesh.rho)
             before = mesh._workspace
-            solve!(mesh;pruned_fft=true,fft_flags=FFTW.ESTIMATE)
+            SpaceCharge._solve_mesh!(mesh;pruned_fft=true,fft_flags=FFTW.ESTIMATE)
+            @test mesh._workspace !== before
+            @test mesh.efield ≈ expected rtol=2e-13
+            mesh.efield = similar(mesh.efield)
+            before = mesh._workspace
+            SpaceCharge._solve_mesh!(mesh; pruned_fft=true, fft_flags=FFTW.ESTIMATE)
             @test mesh._workspace !== before
             @test mesh.efield ≈ expected rtol=2e-13
             previous_threads = FFTW.get_num_threads()
             try
                 FFTW.set_num_threads(previous_threads == 1 ? 2 : 1)
                 before = mesh._workspace
-                solve!(mesh;pruned_fft=true,fft_flags=FFTW.ESTIMATE)
+                SpaceCharge._solve_mesh!(mesh;pruned_fft=true,fft_flags=FFTW.ESTIMATE)
                 @test mesh._workspace !== before
                 @test mesh._workspace.fft_threads == FFTW.get_num_threads()
                 @test mesh.efield ≈ expected rtol=2e-13

@@ -13,10 +13,8 @@ include("green_functions.jl")
 include("fft/transforms.jl")
 include("solvers/free_space.jl")
 
-function __init__()
-    FFTW.set_num_threads(Threads.nthreads())
-end
+include("solvers/fftigf.jl")
 
-export Mesh3D, deposit!, clear_mesh!, interpolate_field, interpolate_field!, solve!, field!
+export FFTIGF, solve!, field!, deposit!
 
 end # module SpaceCharge

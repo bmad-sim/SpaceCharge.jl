@@ -35,6 +35,8 @@ function field! end
 
 # Array wrappers are unwrapped only for placement checks, never for computation.
 _storage(a) = parent(a) === a ? a : _storage(parent(a))
+_array_backend(a) = get_backend(a)
+_array_backend(::BitArray) = CPU()
 _same_device(a, b) = true # CUDA specializes this without becoming a core dependency.
 
 @inline function _check_array(a, owner, ::Type{T}, ax) where T
@@ -42,8 +44,9 @@ _same_device(a, b) = true # CUDA specializes this without becoming a core depend
     eltype(a) === T || throw(ArgumentError("array element type must match $T"))
     axes(a) == ax || throw(DimensionMismatch("array axes must match"))
     Base.require_one_based_indexing(a)
-    typeof(get_backend(a)) === typeof(get_backend(owner)) &&
-        _same_device(_storage(a), owner) ||
+    storage = _storage(a)
+    typeof(_array_backend(storage)) === typeof(get_backend(owner)) &&
+        _same_device(storage, owner) ||
         throw(ArgumentError("arrays must reside on the solver's backend and device"))
     return nothing
 end

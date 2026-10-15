@@ -2,22 +2,8 @@ using KernelAbstractions
 using AbstractFFTs
 using FFTW
 
-"""
-    solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE, cache_green::Bool=true, pruned_fft::Bool=true)
-
-Solves the space charge problem for free-space boundary conditions.
-
-# Arguments
-- `mesh`: A `Mesh3D` object containing the charge density and where the fields will be stored.
-- `at_cathode`: A boolean indicating whether to model a cathode at z=0.
-- `cache_green`: Reuse transformed kernels when spacing, gamma, and offset match
-  exactly. Defaults to true; false avoids allocating new spectrum caches.
-- `pruned_fft`: Skip zero-input and discarded-output CPU FFT lines (default true).
-  Set false for full transforms. GPU always uses full transforms.
-- `fft_flags`: CPU FFTW planning flags (default `FFTW.MEASURE`). GPU plans use
-  their backend defaults. Changing CPU FFT thread count also rebuilds plans.
-"""
-function solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE, cache_green::Bool=true, pruned_fft::Bool=true)
+# Internal FFT stage; solver validity and options are handled by FFTIGF.
+function _solve_mesh!(mesh::Mesh3D; at_cathode::Bool=false, fft_flags=FFTW.MEASURE, cache_green::Bool=true, pruned_fft::Bool=true)
     # Real charge field
     T = eltype(mesh.rho)
     solve_freespace!(mesh; offset = (zero(T), zero(T), zero(T)), fft_flags, cache_green, pruned_fft)
@@ -30,8 +16,7 @@ function solve!(mesh::Mesh3D; at_cathode::Bool = false, fft_flags=FFTW.MEASURE, 
         _solve_freespace!(mesh, _get_workspace(mesh; fft_flags, pruned_fft), offset;
                          cache_green, image=true)
     end
-    # Preserve the original public return value for cathode calls.
-    return at_cathode ? mesh.efield : nothing
+    return nothing
 end
 
 """

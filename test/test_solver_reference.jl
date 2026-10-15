@@ -68,8 +68,9 @@ function reference_test_mesh(T, grid_size, gamma)
     # Contract z with gamma to retain moderate cell aspect ratios in the rest
     # frame. This tests boosted normalization without the known ill-conditioning
     # of the old primitive's Float32 log((r-z)/(r+z)) at extreme aspect ratios.
-    mesh = Mesh3D(grid_size, (-0.023, -0.017, 0.011 / gamma),
-        (0.029, 0.021, 0.039 / gamma); T=T, gamma=gamma)
+    mesh = FFTIGF(grid_size; bounds=((-0.023, -0.017, 0.011 / gamma),
+        (0.029, 0.021, 0.039 / gamma)), T=T).mesh
+    mesh.gamma = T(gamma)
     for k in 1:grid_size[3], j in 1:grid_size[2], i in 1:grid_size[1]
         mesh.rho[i, j, k] = T(1e-12 * (sin(0.7i + 0.3j - 0.2k) + 0.17cos(i + 2j + k)))
     end
@@ -97,7 +98,7 @@ function run_solver_reference_tests()
             T in (Float32, Float64), grid_size in ((4, 5, 6), (7, 4, 5)),
             gamma in (1.0, 10.0, 100.0), at_cathode in (false, true)
             mesh = reference_test_mesh(T, grid_size, gamma)
-            solve!(mesh; at_cathode=at_cathode)
+            SpaceCharge._solve_mesh!(mesh; at_cathode=at_cathode)
             test_field_against_reference(mesh; at_cathode=at_cathode)
         end
     end
@@ -128,7 +129,7 @@ function run_solver_cache_reference_tests()
                     elseif update == :zero
                         fill!(mesh.rho, zero(T))
                     end
-                    solve!(mesh; at_cathode=at_cathode, cache_green=update != :uncached)
+                    SpaceCharge._solve_mesh!(mesh; at_cathode=at_cathode, cache_green=update != :uncached)
                     test_field_against_reference(mesh; at_cathode=at_cathode)
                 end
             end

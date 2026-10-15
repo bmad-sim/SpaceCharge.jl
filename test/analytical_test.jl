@@ -30,19 +30,14 @@ using SpecialFunctions
     particles_q = fill(charge_per_particle, num_particles)
 
     grid_size = (32, 32, 32)
-    mesh = SpaceCharge.Mesh3D(grid_size, particles_x, particles_y, particles_z, total_charge=total_charge)
-
-    SpaceCharge.deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
-    SpaceCharge.solve!(mesh)
-
-    # Extract data for comparison along z-axis (x=0, y=0)
-    z_coords = [mesh.min_bounds[3] + (k - 1) * mesh.delta[3] for k in 1:grid_size[3]]
-
-    # Find the indices closest to x=0 and y=0
-    x_center_idx = argmin(abs.([mesh.min_bounds[1] + (i - 1) * mesh.delta[1] for i in 1:grid_size[1]]))
-    y_center_idx = argmin(abs.([mesh.min_bounds[2] + (j - 1) * mesh.delta[2] for j in 1:grid_size[2]]))
-
-    computed_Ez = [mesh.efield[x_center_idx, y_center_idx, k, 3] for k in 1:grid_size[3]]
+    sc = FFTIGF(grid_size; fft_flags=FFTW.ESTIMATE)
+    solve!(sc, particles_x, particles_y, particles_z, particles_q)
+    # Independent target batch along the physical axis, in metres.
+    z_coords = collect(range(-0.004, 0.004; length=101))
+    zeros_xy = zeros(length(z_coords))
+    outputs = ntuple(_ -> similar(z_coords), 3)
+    field!(outputs..., sc, zeros_xy, zeros_xy, z_coords)
+    computed_Ez = outputs[3]
     analytical_Ez = [E_analytical([0.0, 0.0, z], Q=total_charge, σ=sigma)[3] for z in z_coords]
 
     # Maximum absolute error

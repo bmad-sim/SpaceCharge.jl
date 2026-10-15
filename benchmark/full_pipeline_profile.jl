@@ -3,7 +3,7 @@
 # Usage:
 #   julia --project benchmark/full_pipeline_benchmark_profile.jl
 #
-# This script profiles the CPU full pipeline (deposit! + solve! + interpolate_field)
+# This script profiles the CPU full pipeline (deposit! + solve! + field!)
 # using Julia's built-in Profile and optionally StatProfilerHTML for an HTML report.
 #
 # To install StatProfilerHTML (optional):
@@ -23,10 +23,12 @@ function run_cpu_full_pipeline(grid_size, n_particles; total_charge=1.0e-9, sigm
     particles_y = randn(n_particles) .* sigma
     particles_z = randn(n_particles) .* sigma
     particles_q = fill(charge_per_particle, n_particles)
-    mesh_cpu = Mesh3D(grid_size, particles_x, particles_y, particles_z, total_charge=total_charge)
+    mesh_cpu = FFTIGF(grid_size)
+    solve!(mesh_cpu, particles_x, particles_y, particles_z, particles_q)
+    outputs_cpu = ntuple(_ -> similar(particles_x), 3)
     deposit!(mesh_cpu, particles_x, particles_y, particles_z, particles_q)
     solve!(mesh_cpu)
-    interpolate_field(mesh_cpu, particles_x, particles_y, particles_z)
+    field!(outputs_cpu..., mesh_cpu, particles_x, particles_y, particles_z)
 end
 
 # Standalone GPU full pipeline for profiling
@@ -45,12 +47,14 @@ function run_gpu_full_pipeline(grid_size, n_particles; total_charge=1.0e-9, sigm
     particles_y_gpu = CuArray(particles_y)
     particles_z_gpu = CuArray(particles_z)
     particles_q_gpu = CuArray(particles_q)
-    mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; backend=CUDABackend(), total_charge=total_charge)
+    mesh_gpu = FFTIGF(grid_size; backend=CUDABackend())
+    solve!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
+    outputs_gpu = ntuple(_ -> similar(particles_x_gpu), 3)
     deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
     solve!(mesh_gpu)
-    interpolate_field(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu)
+    field!(outputs_gpu..., mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu)
     CUDA.synchronize()
-end 
+end
 
 function print_usage()
     println("Usage: julia --project benchmark/full_pipeline_profile.jl [--cpu|--gpu|--both]")

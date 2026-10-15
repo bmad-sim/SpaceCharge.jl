@@ -4,6 +4,7 @@ using BenchmarkTools
 using Random
 using LinearAlgebra
 using SpecialFunctions
+using Statistics
 
 """
 Constants for analytical calculations
@@ -28,40 +29,39 @@ function test_correctness(grid_size, n_particles; total_charge=1.0e-9, sigma=0.0
     println("Correctness Test")
     println("Grid: $(grid_size[1])³, Particles: $n_particles")
     println("="^60)
-    
+
     # Generate test particles
     Random.seed!(123)
     charge_per_particle = total_charge / n_particles
-    
+
     particles_x = randn(n_particles) .* sigma
     particles_y = randn(n_particles) .* sigma
     particles_z = randn(n_particles) .* sigma
     particles_q = fill(charge_per_particle, n_particles)
-    
+
     # Create mesh and deposit charge
-    mesh = Mesh3D(grid_size, particles_x, particles_y, particles_z, total_charge=total_charge)
-    deposit!(mesh, particles_x, particles_y, particles_z, particles_q)
-    
+    mesh = FFTIGF(grid_size)
+    solve!(mesh, particles_x, particles_y, particles_z, particles_q)
+
     # Solve for fields
     solve!(mesh)
-    
+
     # Extract data for comparison along z-axis (x=0, y=0)
-    z_coords = [mesh.min_bounds[3] + (k - 1) * mesh.delta[3] for k in 1:grid_size[3]]
-    
-    # Find the indices closest to x=0 and y=0
-    x_center_idx = argmin(abs.([mesh.min_bounds[1] + (i - 1) * mesh.delta[1] for i in 1:grid_size[1]]))
-    y_center_idx = argmin(abs.([mesh.min_bounds[2] + (j - 1) * mesh.delta[2] for j in 1:grid_size[2]]))
-    
-    computed_Ez = [mesh.efield[x_center_idx, y_center_idx, k, 3] for k in 1:grid_size[3]]
+    z_coords = collect(range(max(minimum(particles_z),-4sigma),
+                             min(maximum(particles_z),4sigma);length=101))
+    xy = zeros(length(z_coords))
+    fields = ntuple(_->similar(z_coords),3)
+    field!(fields...,mesh,xy,xy,z_coords)
+    computed_Ez = fields[3]
     analytical_Ez = [E_analytical([0.0, 0.0, z], Q=total_charge, σ=sigma)[3] for z in z_coords]
-    
+
     # Calculate errors
     max_abs_error = maximum(abs.(computed_Ez .- analytical_Ez)) / maximum(abs.(analytical_Ez))
     rms_error = sqrt(mean((computed_Ez .- analytical_Ez).^2)) / sqrt(mean(analytical_Ez.^2))
-    
+
     println("Max relative error: $(round(max_abs_error * 100, digits=4))%")
     println("RMS relative error: $(round(rms_error * 100, digits=4))%")
-    
+
     return (max_abs_error, rms_error)
 end
 
@@ -84,15 +84,18 @@ function compare_cpu_gpu_solve(grid_size, n_particles; total_charge=1.0e-9, sigm
 
     # CPU benchmark
     println("Benchmarking CPU...")
-    mesh_cpu = Mesh3D(grid_size, particles_x, particles_y, particles_z, total_charge=total_charge)
+    mesh_cpu = FFTIGF(grid_size)
+    solve!(mesh_cpu, particles_x, particles_y, particles_z, particles_q)
     deposit!(mesh_cpu, particles_x, particles_y, particles_z, particles_q)
     cpu_time = @belapsed solve!($mesh_cpu)
 
     # Correctness: compare Ez along z-axis to analytical
-    z_coords = [mesh_cpu.min_bounds[3] + (k - 1) * mesh_cpu.delta[3] for k in 1:grid_size[3]]
-    x_center_idx = argmin(abs.([mesh_cpu.min_bounds[1] + (i - 1) * mesh_cpu.delta[1] for i in 1:grid_size[1]]))
-    y_center_idx = argmin(abs.([mesh_cpu.min_bounds[2] + (j - 1) * mesh_cpu.delta[2] for j in 1:grid_size[2]]))
-    computed_Ez = [mesh_cpu.efield[x_center_idx, y_center_idx, k, 3] for k in 1:grid_size[3]]
+    z_coords = collect(range(max(minimum(particles_z),-4sigma),
+                             min(maximum(particles_z),4sigma);length=101))
+    xy = zeros(length(z_coords))
+    fields = ntuple(_->similar(z_coords),3)
+    field!(fields...,mesh_cpu,xy,xy,z_coords)
+    computed_Ez = fields[3]
     analytical_Ez = [E_analytical([0.0, 0.0, z], Q=total_charge, σ=sigma)[3] for z in z_coords]
     max_error = maximum(abs.(computed_Ez .- analytical_Ez)) / maximum(abs.(analytical_Ez)) * 100
 
@@ -108,14 +111,18 @@ function compare_cpu_gpu_solve(grid_size, n_particles; total_charge=1.0e-9, sigm
         particles_y_gpu = CuArray(particles_y)
         particles_z_gpu = CuArray(particles_z)
         particles_q_gpu = CuArray(particles_q)
-        mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; backend=CUDABackend(), total_charge=total_charge)
+        mesh_gpu = FFTIGF(grid_size; backend=CUDABackend())
+        solve!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
         deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
         gpu_time = @belapsed begin
             solve!($mesh_gpu)
             CUDA.synchronize()
         end
         # Compare Ez along z-axis
-        computed_Ez_gpu = [Array(mesh_gpu.efield)[x_center_idx, y_center_idx, k, 3] for k in 1:grid_size[3]]
+        dxy, dz = CuArray(xy), CuArray(z_coords)
+        gpu_fields = ntuple(_->similar(dz),3)
+        field!(gpu_fields...,mesh_gpu,dxy,dxy,dz)
+        computed_Ez_gpu = Array(gpu_fields[3])
         gpu_error = maximum(abs.(computed_Ez_gpu .- analytical_Ez)) / maximum(abs.(analytical_Ez)) * 100
         speedup = cpu_time / gpu_time
         println("GPU: $(round(gpu_time * 1000, digits=2)) ms (max error: $(round(gpu_error, digits=6))%)")
@@ -187,4 +194,6 @@ function comprehensive_benchmark_solve()
     end
 end
 
-comprehensive_benchmark_solve() 
+if abspath(PROGRAM_FILE) == @__FILE__
+    comprehensive_benchmark_solve()
+end

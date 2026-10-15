@@ -1,28 +1,13 @@
-using SpaceCharge
-using CUDA
+using SpaceCharge, CUDA, KernelAbstractions
+CUDA.functional(true)
+CUDA.allowscalar(false)
 
-# GPU usage example: single point charge with CuArray particles
-# The mesh backend is automatically inferred from the particle arrays.
-
-# Define grid size
-grid_size = (64, 64, 64)
-
-# Define particle positions and charges on the GPU
-particles_x_gpu = CuArray([0.0])
-particles_y_gpu = CuArray([0.0])
-particles_z_gpu = CuArray([0.0])
-particles_q_gpu = CuArray([1.0e-9])
-
-# Create a Mesh3D object — backend is inferred from particle arrays
-mesh_gpu = Mesh3D(grid_size, particles_x_gpu, particles_y_gpu, particles_z_gpu)
-
-# Deposit particle charges onto the grid (on GPU)
-deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
-
-# Solve for electric field (on GPU)
-solve!(mesh_gpu)
-
-# Interpolate fields back to particle positions (on GPU)
-Ex_gpu, Ey_gpu, Ez_gpu = interpolate_field(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu)
-
-println("GPU Electric Field at particle position: Ex=$(Ex_gpu[1]), Ey=$(Ey_gpu[1]), Ez=$(Ez_gpu[1])") 
+x=CuArray(Float32[-0.001,0.001]);y=CUDA.zeros(Float32,2);z=copy(y)
+charge=CuArray(Float32[0.5e-9,0.5e-9])
+sc=FFTIGF((32,32,32);T=Float32,backend=get_backend(x),
+          bounds=((-0.01,-0.01,-0.01),(0.01,0.01,0.01)))
+outputs=ntuple(_->similar(x),3)
+solve!(sc,x,y,z,charge;gamma=2)
+field!(outputs...,sc,x,y,z)
+CUDA.synchronize() # synchronize at host access/timing boundaries
+println("GPU E (V/m): ",Array.(outputs))

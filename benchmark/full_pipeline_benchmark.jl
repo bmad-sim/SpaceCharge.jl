@@ -4,11 +4,11 @@ using BenchmarkTools
 using Random
 
 """
-Benchmark deposit! + solve! + interpolate_field for CPU and GPU
+Benchmark deposit! + solve! + field! for CPU and GPU
 """
 function compare_cpu_gpu_full_pipeline(grid_size, n_particles; total_charge=1.0e-9, sigma=0.001)
     println("\n" * "="^60)
-    println("CPU vs GPU Full Pipeline Benchmark (deposit! + solve! + interpolate_field)")
+    println("CPU vs GPU Full Pipeline Benchmark (deposit! + solve! + field!)")
     println("Grid: $(grid_size[1])³, Particles: $n_particles")
     println("="^60)
 
@@ -22,11 +22,13 @@ function compare_cpu_gpu_full_pipeline(grid_size, n_particles; total_charge=1.0e
 
     # CPU benchmark
     println("Benchmarking CPU...")
-    mesh_cpu = Mesh3D(grid_size, particles_x, particles_y, particles_z, total_charge=total_charge)
+    mesh_cpu = FFTIGF(grid_size)
+    solve!(mesh_cpu, particles_x, particles_y, particles_z, particles_q)
+    outputs_cpu = ntuple(_ -> similar(particles_x), 3)
     cpu_time = @belapsed begin
         deposit!($mesh_cpu, $particles_x, $particles_y, $particles_z, $particles_q)
         solve!($mesh_cpu)
-        interpolate_field($mesh_cpu, $particles_x, $particles_y, $particles_z)
+        field!($(outputs_cpu)..., $mesh_cpu, $particles_x, $particles_y, $particles_z)
     end
     println("CPU: $(round(cpu_time * 1000, digits=2)) ms")
 
@@ -39,11 +41,13 @@ function compare_cpu_gpu_full_pipeline(grid_size, n_particles; total_charge=1.0e
         particles_y_gpu = CuArray(particles_y)
         particles_z_gpu = CuArray(particles_z)
         particles_q_gpu = CuArray(particles_q)
-        mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; backend=CUDABackend(), total_charge=total_charge)
+        mesh_gpu = FFTIGF(grid_size; backend=CUDABackend())
+        solve!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
+        outputs_gpu = ntuple(_ -> similar(particles_x_gpu), 3)
         gpu_time = @belapsed begin
             deposit!($mesh_gpu, $particles_x_gpu, $particles_y_gpu, $particles_z_gpu, $particles_q_gpu)
             solve!($mesh_gpu)
-            interpolate_field($mesh_gpu, $particles_x_gpu, $particles_y_gpu, $particles_z_gpu)
+            field!($(outputs_gpu)..., $mesh_gpu, $particles_x_gpu, $particles_y_gpu, $particles_z_gpu)
             CUDA.synchronize()
         end
         speedup = cpu_time / gpu_time
@@ -60,7 +64,7 @@ Comprehensive CPU vs GPU full pipeline benchmark across different problem sizes
 """
 function comprehensive_benchmark_full_pipeline()
     println("\n🚀 Comprehensive CPU vs GPU Full Pipeline Benchmark")
-    println("Testing performance for deposit! + solve! + interpolate_field across different problem sizes...")
+    println("Testing performance for deposit! + solve! + field! across different problem sizes...")
     test_configs = [
         ((32, 32, 32), 10_000),
         ((32, 32, 32), 100_000),
@@ -114,4 +118,4 @@ end
 
 if abspath(PROGRAM_FILE) == @__FILE__
     comprehensive_benchmark_full_pipeline()
-end 
+end

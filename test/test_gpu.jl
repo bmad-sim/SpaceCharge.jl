@@ -1,205 +1,81 @@
-using SpaceCharge
-using Test
-using CUDA
+using SpaceCharge, Test, CUDA, FFTW, Random
 
 function run_gpu_tests()
-    @testset "GPU Functionality" begin
-        # Test GPU mesh creation
-        @testset "GPU Mesh Creation" begin
-            grid_size = (10, 10, 10)
-            particles_x = [0.5]
-            particles_y = [0.5]
-            particles_z = [0.5]
-            particles_q = [1.0]
-            
-            mesh_gpu = Mesh3D(grid_size, particles_x, particles_y, particles_z; 
-                             T=Float32, backend=CUDABackend())
-            
-            @test eltype(mesh_gpu.rho) == Float32
-            @test mesh_gpu.rho isa CuArray{Float32, 3}
-            @test mesh_gpu.efield isa CuArray{Float32, 4}
-        end
-
-        # Test GPU deposition
-        @testset "GPU Deposition" begin
-            grid_size = (8, 8, 8)
-            particles_x_gpu = CuArray([0.5f0])
-            particles_y_gpu = CuArray([0.5f0])
-            particles_z_gpu = CuArray([0.5f0])
-            particles_q_gpu = CuArray([1.0f0])
-            
-            mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, backend=CUDABackend())
-            
-            deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
-            
-            # Check total charge conservation
-            @test sum(Array(mesh_gpu.rho)) ≈ sum(Array(particles_q_gpu)) atol=1e-6
-            
-            # Check that charge is deposited
-            @test any(Array(mesh_gpu.rho) .> 0)
-        end
-
-        # Test GPU interpolation
-        @testset "GPU Interpolation" begin
-            grid_size = (6, 6, 6)
-            particles_x_gpu = CuArray([0.5f0])
-            particles_y_gpu = CuArray([0.5f0])
-            particles_z_gpu = CuArray([0.5f0])
-            particles_q_gpu = CuArray([1.0f0])
-            
-            mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, backend=CUDABackend())
-            
-            # Set up a simple field pattern (use broadcasting to avoid scalar indexing)
-            efield_cpu = zeros(Float32, (6,6,6,3))
-            efield_cpu[1,1,1,1] = 1.0f0
-            efield_cpu[2,1,1,1] = 2.0f0
-            mesh_gpu.efield .= CuArray(efield_cpu)
-            
-            Ex_gpu, Ey_gpu, Ez_gpu = interpolate_field(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu)
-            
-            # Check return types
-            @test Ex_gpu isa CuArray{Float32, 1}
-            @test Ey_gpu isa CuArray{Float32, 1}
-            @test Ez_gpu isa CuArray{Float32, 1}
-            
-            # Check that interpolation gives reasonable values
-            @test isfinite(Array(Ex_gpu)[1])
-            @test isfinite(Array(Ey_gpu)[1])
-            @test isfinite(Array(Ez_gpu)[1])
-        end
-
-        # Test GPU solver
-        @testset "GPU Solver" begin
-            grid_size = (8, 8, 8)
-            particles_x_gpu = CuArray([0.0f0])
-            particles_y_gpu = CuArray([0.0f0])
-            particles_z_gpu = CuArray([0.0f0])
-            particles_q_gpu = CuArray([1.0f0])
-            
-            mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, backend=CUDABackend(), gamma=2.0)
-            
-            # Deposit charge and solve
-            deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
-            solve!(mesh_gpu)
-            
-            # Check that fields are computed
-            @test any(Array(mesh_gpu.efield) .!= 0.0f0)
-            
-            # Check charge conservation
-            @test sum(Array(mesh_gpu.rho)) ≈ sum(Array(particles_q_gpu)) atol=1e-6
-        end
-
-        # Test GPU with multiple particles
-        @testset "GPU Multiple Particles" begin
-            grid_size = (6, 6, 6)
-            particles_x_gpu = CuArray([0.2f0, 0.8f0])
-            particles_y_gpu = CuArray([0.3f0, 0.7f0])
-            particles_z_gpu = CuArray([0.4f0, 0.6f0])
-            particles_q_gpu = CuArray([1.0f0, -1.0f0])
-            
-            mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, backend=CUDABackend())
-            
-            # Deposit and solve
-            deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
-            solve!(mesh_gpu)
-            
-            # Interpolate fields
-            Ex_gpu, Ey_gpu, Ez_gpu = interpolate_field(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu)
-            
-            # Check results
-            @test length(Ex_gpu) == 2
-            @test all(isfinite.(Array(Ex_gpu)))
-            @test all(isfinite.(Array(Ey_gpu)))
-            @test all(isfinite.(Array(Ez_gpu)))
-            
-            # Check charge conservation
-            @test sum(Array(mesh_gpu.rho)) ≈ sum(Array(particles_q_gpu)) atol=1e-6
-        end
-
-        # Test default backend inference from CuArray particles
-        @testset "Default Backend Inference" begin
-            grid_size = (6, 6, 6)
-            particles_x_gpu = CuArray([0.5f0, 1.0f0])
-            particles_y_gpu = CuArray([0.5f0, 1.0f0])
-            particles_z_gpu = CuArray([0.5f0, 1.0f0])
-
-            # No explicit backend — should infer CUDABackend from CuArray inputs
-            mesh_gpu = Mesh3D(grid_size, particles_x_gpu, particles_y_gpu, particles_z_gpu;
-                             T=Float32)
-
-            @test mesh_gpu.rho isa CuArray{Float32, 3}
-            @test mesh_gpu.efield isa CuArray{Float32, 4}
-            @test size(mesh_gpu.rho) == grid_size
-            @test size(mesh_gpu.efield) == (grid_size..., 3)
-        end
-
-        # Test manual bounds constructor with GPU backend
-        @testset "Manual Bounds Constructor GPU" begin
-            grid_size = (8, 8, 8)
-            min_bounds = (-1.0, -2.0, -3.0)
-            max_bounds = (1.0, 2.0, 3.0)
-
-            mesh_gpu = Mesh3D(grid_size, min_bounds, max_bounds;
-                             T=Float32, backend=CUDABackend())
-
-            @test mesh_gpu.rho isa CuArray{Float32, 3}
-            @test mesh_gpu.efield isa CuArray{Float32, 4}
-            @test size(mesh_gpu.rho) == grid_size
-            @test size(mesh_gpu.efield) == (grid_size..., 3)
-            @test mesh_gpu.min_bounds == Float32.(min_bounds)
-            @test mesh_gpu.max_bounds == Float32.(max_bounds)
-        end
-
-        # Compare each component on a physical, nondegenerate mesh, against
-        # the independent Float64 reference (not a cancellation-prone sum).
-        @testset "GPU vs independent reference" begin
-            for T in (Float32, Float64), cathode in (false, true)
-                cpu = reference_test_mesh(T, (5,6,4), 10.0)
-                gpu = Mesh3D(cpu.grid_size, cpu.min_bounds, cpu.max_bounds;
-                             T, gamma=cpu.gamma, backend=CUDABackend())
-                copyto!(gpu.rho, cpu.rho)
-                solve!(gpu; at_cathode=cathode)
-                copyto!(cpu.efield, Array(gpu.efield))
-                test_field_against_reference(cpu; at_cathode=cathode)
-                x = CuArray(T[0, 0.01]); y = copy(x); z = CuArray(T[0.002,0.003])
-                outputs = (similar(x), similar(x), similar(x))
-                @test interpolate_field!(outputs...,gpu,x,y,z) === outputs
-                expected = interpolate_field(cpu, Array(x), Array(y), Array(z))
-                for (actual, ref) in zip(outputs, expected)
-                    @test Array(actual) ≈ ref rtol=20eps(T)
-                end
-                # Reuse, rebuild, and bypass the device-resident cache.
-                for cached in (true, false, true)
-                    gpu.gamma *= T(1.03)
-                    cpu.gamma = gpu.gamma
-                    solve!(gpu; at_cathode=cathode, cache_green=cached)
-                    copyto!(cpu.efield, Array(gpu.efield))
-                    test_field_against_reference(cpu; at_cathode=cathode)
-                end
+    CUDA.allowscalar(false)
+    @testset "CUDA array API and independent reference" begin
+        for T in (Float32,Float64), cathode in (false,true)
+            ref=reference_test_mesh(T,(5,6,4),10.)
+            gpu=FFTIGF(ref.grid_size;T,backend=CUDABackend(),
+                bounds=(ref.min_bounds,ref.max_bounds),at_cathode=cathode)
+            cpu=FFTIGF(ref.grid_size;T,bounds=(ref.min_bounds,ref.max_bounds),
+                at_cathode=cathode,fft_flags=FFTW.ESTIMATE)
+            # Deposit nodal sources through the new public stages.
+            coords=ntuple(d->collect(range(ref.min_bounds[d],ref.max_bounds[d];length=ref.grid_size[d])),3)
+            points=collect(Iterators.product(coords...))
+            x,y,z=ntuple(d->vec(getindex.(points,d)),3);q=vec(copy(ref.rho))
+            dx,dy,dz,dq=CuArray.((x,y,z,q))
+            @test deposit!(gpu,dx,dy,dz,dq) === gpu
+            deposit!(cpu,x,y,z,q)
+            for gamma in (10.,10.,11.3,1.)
+                @test solve!(gpu;gamma) === gpu
+                solve!(cpu;gamma)
+                CUDA.synchronize()
+                ref.rho .= cpu.mesh.rho;ref.gamma=T(gamma)
+                copyto!(ref.efield,Array(gpu.mesh.efield))
+                test_field_against_reference(ref;at_cathode=cathode)
+                targets=(T[0,0.01],T[0,0.01],T[0.002,0.003])
+                dtargets=CuArray.(targets)
+                fields=CUDA.zeros(T,2,3);out=ntuple(i->view(fields,:,i),3)
+                expected=ntuple(_->zeros(T,2),3)
+                @test field!(out...,gpu,dtargets...) === out
+                field!(expected...,cpu,targets...)
+                tol=T==Float32 ? 5e-4 : 3e-10
+                @test all(isapprox(Array(out[i]),expected[i];rtol=tol) for i in 1:3)
+                fill!(fields,T(NaN));field!(out...,gpu,dtargets...)
+                @test all(isfinite,Array(fields))
+                @test_throws ArgumentError field!(expected...,gpu,dtargets...)
             end
+            @test_throws ArgumentError solve!(gpu,x,y,z,q)
+            @test !gpu.prepared
         end
-        # Test GPU clear_mesh!
-        @testset "GPU Clear Mesh" begin
-            grid_size = (4, 4, 4)
-            particles_x_gpu = CuArray([0.5f0])
-            particles_y_gpu = CuArray([0.5f0])
-            particles_z_gpu = CuArray([0.5f0])
-            particles_q_gpu = CuArray([1.0f0])
-            
-            mesh_gpu = Mesh3D(grid_size, Array(particles_x_gpu), Array(particles_y_gpu), Array(particles_z_gpu); 
-                             T=Float32, backend=CUDABackend())
-            
-            # Deposit some charge
-            deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
-            @test sum(Array(mesh_gpu.rho)) ≈ sum(Array(particles_q_gpu)) atol=1e-6
-            
-            # Clear the mesh
-            clear_mesh!(mesh_gpu)
-            @test all(Array(mesh_gpu.rho) .== 0.0f0)
+    end
+    @testset "CUDA adaptive masks and reusable storage" begin
+        for T in (Float32,Float64)
+            rng=MersenneTwister(71);n=5001
+            host=ntuple(_->rand(rng,T,n).*T(.002),3)
+            q=fill(T(1e-12/n),n); mask=fill(true,n); mask[3:7:end].=false
+            for a in (host...,q);a[.!mask].=T(NaN);end
+            src=CuArray.((host...,q));active=CuArray(mask)
+            gpu=FFTIGF((8,9,10);T,backend=CUDABackend())
+            cpu=FFTIGF((8,9,10);T,fft_flags=FFTW.ESTIMATE)
+            solve!(gpu,src...;active,gamma=2); solve!(cpu,host...,q;active=mask,gamma=2)
+            out=ntuple(_->similar(src[1]),3);expected=ntuple(_->zeros(T,n),3)
+            field!(out...,gpu,src[1:3]...;active)
+            field!(expected...,cpu,host...;active=mask)
+            tol=T==Float32 ? 2e-4 : 1e-10
+            @test all(isapprox(Array(out[i]),expected[i];rtol=tol) for i in 1:3)
+            @test all(all(iszero,Array(a)[.!mask]) for a in out)
+            summary=gpu.extent_device; workspace=gpu.mesh._workspace
+            frozen=Array.(out)
+            for a in src;fill!(a,T(NaN));end
+            targets=CuArray.(host)
+            field!(out...,gpu,targets...;active)
+            @test Array.(out) == frozen
+            @test_throws ArgumentError solve!(gpu,src...;active)
+            @test !gpu.prepared
+            @test_throws ArgumentError field!(out...,gpu,targets...)
+            fill!(active,false);solve!(gpu,src...;active)
+            field!(out...,gpu,targets...;active)
+            @test all(a->all(iszero,Array(a)),out)
+            empty=CUDA.zeros(T,0)
+            solve!(gpu,empty,empty,empty,empty)
+            @test field!(empty,empty,empty,gpu,empty,empty,empty) === (empty,empty,empty)
+            src=CuArray.((host...,q));active=CuArray(mask)
+            solve!(gpu,src...;active)
+            @test gpu.extent_device === summary
+            @test gpu.mesh._workspace === workspace
+            @test_throws ArgumentError solve!(gpu,src...;active=mask)
+            @test_throws ArgumentError solve!(gpu,src...;gamma=Inf)
         end
     end
 end

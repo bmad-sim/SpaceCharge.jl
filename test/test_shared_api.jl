@@ -18,6 +18,8 @@ function run_shared_api_tests()
             q=ones(T,4);mask=Bool[true,false,true,false]
             @test SpaceCharge._check_arrays(owner,(x,y,z,q),nothing) === nothing
             @test SpaceCharge._check_arrays(owner,(x,y,z,q),mask) === nothing
+            @test SpaceCharge._check_arrays(owner,(x,y,z,q),trues(4)) === nothing
+            @test SpaceCharge._check_arrays(owner,(x,y,z,q),view(trues(8),1:2:8)) === nothing
             @test SpaceCharge._storage(x) === coordinates
             @test SpaceCharge._active(nothing,1)
             @test !SpaceCharge._active(mask,2)
