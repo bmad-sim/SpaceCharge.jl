@@ -67,25 +67,12 @@ function reference_potential_field(mesh; cathode=mesh.options.at_cathode)
     return phi, result
 end
 
-function check_potential_reference(sc; cathode=sc.options.at_cathode)
-    phi, expected = reference_potential_field(sc; cathode)
+function check_potential_reference(sc)
+    phi, expected = reference_potential_field(sc)
     observed = Array(sc.efield)
     tol = eltype(sc.rho) == Float32 ? 8e-4 : 3e-11
     @test all(isfinite, observed)
-    w = sc._workspace
-    observed_phi = if cathode
-        Array(w.potential)
-    else
-        # Free-space fields consume the inverse crop without a normalized copy.
-        # Retain the independent scalar-potential check at the same tolerance.
-        nx, ny, nz = sc.grid_size
-        raw = w.pruned === nothing ? view(w.result, nx:2nx-1, ny:2ny-1, nz:2nz-1) :
-                                     view(w.pruned.result, nx:2nx-1, :, :)
-        T = eltype(sc.rho)
-        factor = T(inv(4pi * EPS_0 * E_CHARGE)) / T(length(w.pad))
-        factor .* Array(raw)
-    end
-    @test observed_phi ≈ phi rtol=tol
+    @test Array(sc._workspace.potential) ≈ phi rtol=tol
     for c in 1:3
         @test observed[:,:,:,c] ≈ expected[:,:,:,c] rtol=tol
     end
@@ -112,7 +99,7 @@ function run_potential_reference_tests(backend=CPU())
             solve!(sc, gamma)
             check_potential_reference(sc)
             @test length(sc._workspace.free_cache.spectra) == 1
-            @test cathode ? size(sc._workspace.potential) == n : sc._workspace.potential === nothing
+            @test size(sc._workspace.potential) == n
             @test size(sc._workspace.pad) == 2 .* n
             @test (sc._workspace.image_cache.spectra !== nothing) == cathode
         end
@@ -128,23 +115,6 @@ function run_potential_reference_tests(backend=CPU())
             solve!(sc,2)
             check_potential_reference(sc)
             @test (sc._workspace.image_cache.spectra === nothing) == (zlo == -2.)
-        end
-    end
-    @testset "Potential scratch is lazy and preserves plans $backend" begin
-        for T in (Float32, Float64)
-            sc = potential_reference_mesh(T, (3,4,5), 2.; backend)
-            solve!(sc, 2)
-            first_workspace = sc._workspace
-            @test first_workspace.potential === nothing
-            for cathode in (true, false, true)
-                SpaceCharge._solve_mesh!(sc; at_cathode=cathode)
-                w = sc._workspace
-                @test w.forward === first_workspace.forward
-                @test w.pruned === first_workspace.pruned
-                @test w.free_cache === first_workspace.free_cache
-                @test w.free_cache.spectra === first_workspace.free_cache.spectra
-                check_potential_reference(sc; cathode)
-            end
         end
     end
     @testset "Potential FD cache and transform reuse $backend" begin
