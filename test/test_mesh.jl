@@ -30,7 +30,6 @@ function run_mesh_tests()
         end
         @test_throws ArgumentError solve!(FFTIGF((4,4,4);T=Float32),Float32[0],Float32[0],Float32[0],Float32[0];bounds=((1e8,0,0),(1e8+1,1,1)))
         @test_throws ArgumentError solve!(FFTIGF((4,4,4);T=Float32),Float32[0],Float32[0],Float32[0],Float32[0];bounds=((0,0,0),(nextfloat(0f0),1,1)))
-        @test_throws ArgumentError solve!(FFTIGF((4,4,4);at_cathode=true),a,a,a,a;bounds=((-1,-1,-1),(1,1,1)))
         for T in (Float32,Float64)
             sc=FFTIGF((4,4,4);T,fft_flags=FFTW.ESTIMATE)
             x=T[-0.5,0.5]; q=T[1e-12,-1e-12]; out=ntuple(_->similar(x),3)

@@ -5,6 +5,8 @@
 
 Reusable integrated-field Green-function FFT solver. Each particle-based `solve!`
 fits the active particles unless given `bounds=(lo, hi)` for that call.
+Active charges must be finite; with supplied bounds, active positions must also
+be finite and inside the closed bounds.
 `at_cathode=true` adds the image-charge field at z=0. FFT plans, Green spectra,
 and deposition scratch are reused. GPU transforms are always full.
 """
@@ -67,7 +69,6 @@ function _set_grid_bounds!(sc::FFTIGF{T}, bounds) where T
     delta = (hi .- lo) ./ (sc.grid_size .- 1)
     all(d -> isfinite(d) && d > 0 && isfinite(inv(d)), delta) ||
         throw(ArgumentError("grid spacing must be finite and positive"))
-    sc.options.at_cathode && lo[3] < 0 && throw(ArgumentError("cathode bounds require z >= 0"))
     sc.min_bounds, sc.max_bounds, sc.delta = lo, hi, delta
     return nothing
 end
@@ -78,7 +79,6 @@ function _grid_bounds_from_particles(sc::FFTIGF{T}, x, y, z, active) where T
     particle_bounds = _particle_bounds(x, y, z, active)
     lo, hi = particle_bounds.lo, particle_bounds.hi
     all(isfinite, lo) && all(isfinite, hi) || throw(ArgumentError("active particle coordinates must be finite"))
-    sc.options.at_cathode && lo[3] < 0 && throw(ArgumentError("particles require z >= 0 with at_cathode=true"))
     pairs = ntuple(3) do k
         lower = lo[k]
         upper = hi[k]
@@ -95,11 +95,7 @@ function _grid_bounds_from_particles(sc::FFTIGF{T}, x, y, z, active) where T
         end
         return lower_bound, upper_bound
     end
-    l, h = first.(pairs), last.(pairs)
-    if sc.options.at_cathode && l[3] < 0
-        l = (l[1], l[2], zero(T))
-    end
-    return l, h
+    return first.(pairs), last.(pairs)
 end
 
 function _check_active_particles(x, active)
@@ -125,6 +121,7 @@ end
     deposit!(solver::FFTIGF, x, y, z, charge; active=nothing, clear=true)
 
 Deposit on geometry established by the last particle-based `solve!`.
+Active positions must be finite and inside its closed bounds; active charges must be finite.
 `clear=false` accumulates charge.
 Empty/all-inactive input is an error with `clear=true` and adds nothing with
 `clear=false`. Follow with `solve!(solver; gamma=1)`.
@@ -151,6 +148,6 @@ function field!(Ex, Ey, Ez, sc::FFTIGF, x, y, z; active=nothing)
     _check_arrays(sc.rho, (x, y, z, Ex, Ey, Ez), active)
     isempty(x) && return (Ex, Ey, Ez)
     interpolate_kernel!(get_backend(sc.rho))(Ex, Ey, Ez, sc.efield, x, y, z,
-        sc.min_bounds, inv.(sc.delta), sc.max_bounds, active; ndrange=length(x))
+        sc.min_bounds, inv.(sc.delta), active; ndrange=length(x))
     return Ex, Ey, Ez
 end

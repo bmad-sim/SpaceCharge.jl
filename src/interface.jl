@@ -15,6 +15,7 @@ function solve! end
 Evaluate the last successfully prepared field, overwriting and returning
 `(Ex, Ey, Ez)` in V/m. Inactive evaluation points receive zero without reading
 their coordinates.
+Active evaluation points must be finite and inside the solver's closed bounds.
 """
 function field! end
 

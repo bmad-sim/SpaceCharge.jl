@@ -48,6 +48,44 @@ function test_float32_adaptive_endpoints(backend)
     end
 end
 
+function test_cathode_geometry(backend)
+    @testset "Cathode preserves supplied and fitted geometry on $backend" begin
+        for T in (Float32,Float64)
+            n=(5,6,7)
+            free=FFTIGF(n;T,backend,fft_flags=FFTW.ESTIMATE)
+            cathode=FFTIGF(n;T,backend,at_cathode=true,fft_flags=FFTW.ESTIMATE)
+            x,y,z,q=ntuple(_->KernelAbstractions.zeros(backend,T,2),4)
+            copyto!(x,T[-.007,.011]);copyto!(y,T[.004,-.009]);copyto!(q,T[1e-12,-2e-12])
+            for (points,bounds) in (
+                ((-.017,-.003),((-.02,-.03,-.04),(.02,.03,-.002))),
+                ((-.017,.003),((-.02,-.03,-.023),(.02,.03,.019))),
+                ((-.017,-.003),nothing),
+                ((0.,.012),nothing),
+            )
+                copyto!(z,T[points...])
+                solve!(free,x,y,z,q;gamma=2,bounds)
+                @test solve!(cathode,x,y,z,q;gamma=2,bounds) === cathode
+                @test (cathode.min_bounds,cathode.max_bounds,cathode.delta) ==
+                      (free.min_bounds,free.max_bounds,free.delta)
+                if bounds === nothing
+                    # Padding around z=0 must remain negative, just as in free space.
+                    @test cathode.min_bounds[3] < min(points...)
+                else
+                    @test (cathode.min_bounds,cathode.max_bounds) == map(b->T.(b),bounds)
+                end
+                snapshot=(rho=Array(cathode.rho),efield=Array(cathode.efield),
+                          delta=cathode.delta,gamma=cathode.gamma,
+                          min_bounds=cathode.min_bounds,max_bounds=cathode.max_bounds)
+                test_field_against_reference(snapshot;at_cathode=true)
+            end
+            # Ordinary geometry validation still applies in cathode mode.
+            for bounds in (((0,0,0),(1,1,0)),((0,0,0),(1,1,Inf)))
+                @test_throws ArgumentError solve!(cathode,x,y,z,q;bounds)
+            end
+        end
+    end
+end
+
 function run_solver_tests()
     @testset "Particle presence checked once before bounds selection" begin
         sc=FFTIGF((4,4,4);fft_flags=FFTW.ESTIMATE)
@@ -211,6 +249,7 @@ function run_solver_tests()
         end
     end
     test_float32_adaptive_endpoints(CPU())
+    test_cathode_geometry(CPU())
     @testset "Coulomb normalization and cathode" begin
         for T in (Float32,Float64)
             sc=FFTIGF((33,33,33);T,fft_flags=FFTW.ESTIMATE)
@@ -233,7 +272,5 @@ function run_solver_tests()
             @test e[:,:,1,3] ≈ 2free.efield[:,:,1,3] rtol=1e-10
             @test cathode.rho == deposited_charge
         end
-        adaptive=FFTIGF((7,8,9);at_cathode=true,fft_flags=FFTW.ESTIMATE)
-        @test_throws ArgumentError solve!(adaptive,x,y,-z,q)
     end
 end

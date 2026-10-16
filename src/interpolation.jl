@@ -11,7 +11,6 @@ using KernelAbstractions
     particles_z,
     min_bounds,
     inv_delta,
-    max_bounds,
     active,
 )
     i = @index(Global, Linear)
@@ -20,7 +19,6 @@ using KernelAbstractions
         Ex[i] = Ey[i] = Ez[i] = zero(eltype(Ex))
     else
         @inbounds x, y, z = particles_x[i], particles_y[i], particles_z[i]
-        _inside(x, y, z, min_bounds, max_bounds) || error("evaluation point outside the FFT bounds")
         ix, dx = _cell(x, min_bounds[1], inv_delta[1], size(efield, 1))
         iy, dy = _cell(y, min_bounds[2], inv_delta[2], size(efield, 2))
         iz, dz = _cell(z, min_bounds[3], inv_delta[3], size(efield, 3))

@@ -37,12 +37,6 @@ function run_interpolation_tests()
             end for _ in 1:3])
             @test all(out->all(out[i]==o[i] for i in 1:3),results)
             @test field!(empty,empty,empty,sc,empty,empty,empty) === (empty,empty,empty)
-            for bad in (T(NaN),T(Inf),nextfloat(T(2)),prevfloat(T(-2)))
-                @test_throws Exception field!(zeros(T,1),zeros(T,1),zeros(T,1),sc,T[bad],T[0],T[0])
-            end
-            zero_source=FFTIGF((4,4,4);T,fft_flags=FFTW.ESTIMATE)
-            a=T[0]; solve!(zero_source,a,a,a,a)
-            @test_throws Exception field!(zeros(T,1),zeros(T,1),zeros(T,1),zero_source,T[NaN],T[0],T[0])
         end
     end
 end

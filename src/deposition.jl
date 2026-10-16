@@ -1,10 +1,6 @@
 using KernelAbstractions
 using Atomix
 
-@inline _inside(x, y, z, lo, hi) =
-    (lo[1] <= x) & (x <= hi[1]) & (lo[2] <= y) & (y <= hi[2]) &
-    (lo[3] <= z) & (z <= hi[3])
-
 # Closed upper faces belong to the last cell, with weight 1 on its upper node.
 @inline function _cell(x, lo, inv_delta, n)
     u = (x - lo) * inv_delta
@@ -68,25 +64,23 @@ Deposit a particle's charge onto eight neighboring nodes using CIC weights.
 end
 
 # Inactive coordinates and charges are never loaded.
-@inline function _deposit_one!(rho, x, y, z, q, i, lo, hi, inv_delta, active, atomic)
+@inline function _deposit_one!(rho, x, y, z, q, i, lo, inv_delta, active, atomic)
     if _active(active, i)
         @inbounds xi, yi, zi, qi = x[i], y[i], z[i], q[i]
-        _inside(xi, yi, zi, lo, hi) && isfinite(qi) ||
-            error("active particle data must be finite and positions inside the FFT bounds")
         deposit_particle!(rho, xi, yi, zi, qi, lo, inv_delta; use_atomic=atomic)
     end
     return nothing
 end
 
-@kernel function deposit_kernel!(rho, x, y, z, q, lo, hi, inv_delta, active)
+@kernel function deposit_kernel!(rho, x, y, z, q, lo, inv_delta, active)
     i = @index(Global, Linear)
-    _deposit_one!(rho, x, y, z, q, i, lo, hi, inv_delta, active, true)
+    _deposit_one!(rho, x, y, z, q, i, lo, inv_delta, active, true)
 end
 
 function deposit_gpu!(mesh, x, y, z, q, active)
     isempty(x) && return nothing
     deposit_kernel!(get_backend(mesh.rho))(mesh.rho, x, y, z, q,
-        mesh.min_bounds, mesh.max_bounds, inv.(mesh.delta), active;
+        mesh.min_bounds, inv.(mesh.delta), active;
         ndrange=length(x), workgroupsize=256)
     return nothing
 end
@@ -94,7 +88,7 @@ end
 function deposit_vectorized!(mesh, x, y, z, q, active=nothing)
     inv_delta = inv.(mesh.delta)
     @inbounds for i in eachindex(x)
-        _deposit_one!(mesh.rho, x, y, z, q, i, mesh.min_bounds, mesh.max_bounds,
+        _deposit_one!(mesh.rho, x, y, z, q, i, mesh.min_bounds,
                       inv_delta, active, false)
     end
     return nothing
@@ -136,7 +130,7 @@ function _deposit_threaded!(mesh, particles_x, particles_y, particles_z, particl
         last_particle = div(n * chunk, nchunks)
         @inbounds for i in first_particle:last_particle
             _deposit_one!(grid, particles_x, particles_y, particles_z, particles_q,
-                          i, bounds, mesh.max_bounds, inv_delta, active, false)
+                          i, bounds, inv_delta, active, false)
         end
     end
     rho = mesh.rho

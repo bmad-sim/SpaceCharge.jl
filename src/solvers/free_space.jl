@@ -24,18 +24,6 @@ function _solve_mesh!(mesh::FFTIGF; gamma=mesh.gamma,
     return nothing
 end
 
-"""
-    solve_freespace!(mesh::FFTIGF{T, A, B}; offset::NTuple{3, T} = (zero(T), zero(T), zero(T))) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
-
-Optimized free-space solver for computing electric field from charge density.
-Uses pre-allocated workspace arrays, cached real FFT plans, and CPU multi-threading for
-optimal performance on both CPU and GPU.
-"""
-function solve_freespace!(mesh::FFTIGF{T};
-    offset::NTuple{3,T}=(zero(T),zero(T),zero(T)), fft_flags=FFTW.MEASURE, cache_green::Bool=true, pruned_fft::Bool=true) where T
-    _solve_freespace!(mesh, _get_workspace(mesh; fft_flags, pruned_fft), offset; cache_green)
-end
-
 function _green_spectrum!(dest, mesh, w, comp, offset)
     if all(iszero, offset)
         _symmetric_green!(w.pad, mesh, comp, w)

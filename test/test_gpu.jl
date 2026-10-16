@@ -3,6 +3,7 @@ using SpaceCharge, Test, CUDA, FFTW, Random
 function run_gpu_tests()
     CUDA.allowscalar(false)
     test_float32_adaptive_endpoints(CUDABackend())
+    test_cathode_geometry(CUDABackend())
     @testset "CUDA array API and independent reference" begin
         for T in (Float32,Float64), cathode in (false,true)
             ref=reference_test_mesh(T,(5,6,4),10.)

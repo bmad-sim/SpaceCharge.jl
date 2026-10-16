@@ -35,12 +35,6 @@ function run_deposition_tests()
             # Active particles with zero charge remain valid.
             a=T[0]; deposit!(sc,a,a,a,a); solve!(sc)
             @test all(iszero,sc.efield)
-            for bad in (T(NaN),T(Inf),prevfloat(T(0)),nextfloat(T(1)))
-                @test_throws ErrorException deposit!(sc,T[bad],T[0],T[0],T[1])
-            end
-            for bad in (T(NaN),T(Inf))
-                @test_throws ErrorException deposit!(sc,T[0],T[0],T[0],T[bad])
-            end
         end
     end
 end
