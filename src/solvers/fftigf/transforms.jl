@@ -50,9 +50,13 @@ function _charge_transform!(mesh, w, p, image)
     return nothing
 end
 
+# The convolution product is disposable scratch. Backends may use a destructive
+# inverse without preserving it; charge and cached Green spectra stay separate.
+_inverse_transform!(output, plan, input) = mul!(output, plan, input)
+
 function _convolution_inverse!(mesh, w, ::Nothing)
     nx, ny, nz = mesh.grid_size
-    mul!(w.result, w.backward, w.product)
+    _inverse_transform!(w.result, w.backward, w.product)
     return view(w.result, nx:2nx-1, ny:2ny-1, nz:2nz-1)
 end
 
