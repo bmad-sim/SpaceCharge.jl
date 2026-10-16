@@ -38,37 +38,39 @@ function _potential_green!(mesh, w, offset)
     return nothing
 end
 
-@inline function _potential_difference(phi, I, d)
+@inline function _potential_difference(phi, I, d, factor)
     i, n = I[d], size(phi, d)
     step = CartesianIndex(ntuple(k -> k == d ? 1 : 0, 3))
     @inbounds if n == 2
         # Both endpoints use the secant; scale below includes the common 1/(2h).
-        return i == 1 ? 2*(phi[I]-phi[I+step]) : 2*(phi[I-step]-phi[I])
+        return i == 1 ? 2*(factor*phi[I]-factor*phi[I+step]) :
+                        2*(factor*phi[I-step]-factor*phi[I])
     elseif i == 1
-        return 3phi[I] - 4phi[I+step] + phi[I+2step]
+        return 3*(factor*phi[I]) - 4*(factor*phi[I+step]) + factor*phi[I+2step]
     elseif i == n
-        return -phi[I-2step] + 4phi[I-step] - 3phi[I]
+        return -(factor*phi[I-2step]) + 4*(factor*phi[I-step]) - 3*(factor*phi[I])
     else
-        return phi[I-step] - phi[I+step]
+        return factor*phi[I-step] - factor*phi[I+step]
     end
 end
 
-@kernel function _potential_field!(field, @Const(phi), scale)
+@kernel function _potential_field!(field, @Const(phi), scale, factor)
     I = @index(Global, Cartesian)
     # Centered inside, second-order one-sided at physical faces. The adjacent
     # doubled-grid values are not a valid physical halo and must not be read.
-    field[I, 1] = scale[1] * _potential_difference(phi, I, 1)
-    field[I, 2] = scale[2] * _potential_difference(phi, I, 2)
-    field[I, 3] = scale[3] * _potential_difference(phi, I, 3)
+    # Normalize each value before subtraction, as in the staged calculation.
+    field[I, 1] = scale[1] * _potential_difference(phi, I, 1, factor)
+    field[I, 2] = scale[2] * _potential_difference(phi, I, 2, factor)
+    field[I, 3] = scale[3] * _potential_difference(phi, I, 3, factor)
 end
 
-function _field_from_potential!(mesh, w)
+function _field_from_potential!(mesh, phi, factor=one(eltype(phi)))
     dx, dy, dz = mesh.delta
     gamma = mesh.gamma
     # Phi is the rest-frame potential in volts: E_perp=gamma*E'_perp,
     # E_z=E'_z, and d/dz'=1/gamma*d/dz for the lab-frame grid spacing.
     scale = (gamma / (2dx), gamma / (2dy), inv(2gamma * dz))
-    _potential_field!(get_backend(mesh.rho))(mesh.efield, w.potential, scale;
+    _potential_field!(get_backend(mesh.rho))(mesh.efield, phi, scale, factor;
                                            ndrange=mesh.grid_size)
     return nothing
 end
