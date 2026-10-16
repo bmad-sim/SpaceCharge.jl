@@ -21,6 +21,8 @@ include("test_solvers.jl")
 include("test_solver_reference.jl")
 include("test_pruned_fft.jl")
 include("test_interpolation.jl")
+include("test_potential_fd.jl")
+include("test_potential_accuracy.jl")
 CUDA_AVAILABLE && include("test_gpu.jl")
 
 # Qualitative tests
@@ -34,10 +36,15 @@ CUDA_AVAILABLE && include("test_gpu.jl")
     run_pruned_fft_tests()
     run_solver_cache_reference_tests()
     run_interpolation_tests()
+    run_potential_constructor_tests()
+    run_potential_reference_tests()
+    run_potential_accuracy_tests()
     
     # GPU tests only if CUDA is available
     if CUDA_AVAILABLE
         run_gpu_tests()
+        run_potential_reference_tests(CUDABackend())
+        run_potential_accuracy_tests(CUDABackend())
     else
         @info "CUDA not available, skipping GPU tests"
     end

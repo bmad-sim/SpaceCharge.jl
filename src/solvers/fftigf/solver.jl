@@ -1,14 +1,17 @@
 """
     FFTIGF(grid_size; T=Float64, backend=CPU(),
            fft_flags=FFTW.MEASURE, cache_green=true, pruned_fft=true,
-           at_cathode=false)
+           at_cathode=false, field_method=:direct)
 
-Reusable integrated-field Green-function FFT solver. Each particle-based `solve!`
+Reusable integrated Green-function FFT solver. Each particle-based `solve!`
 fits the active particles unless given `bounds=(lo, hi)` for that call.
 Active charges must be finite; with supplied bounds, active positions must also
 be finite and inside the closed bounds.
 `at_cathode=true` adds the image-charge field at z=0. FFT plans, Green spectra,
 and deposition scratch are reused. GPU transforms are always full.
+`field_method=:direct` integrates the electric field. `:potential_fd` integrates
+the potential, with centered second-order differences inside and three-point
+one-sided differences at the faces. Two-node axes use a two-point difference.
 """
 mutable struct FFTIGF{T <: AbstractFloat,A <: AbstractArray{T},B <: AbstractArray{T},O}
     grid_size::NTuple{3,Int}
@@ -30,16 +33,19 @@ end
 
 function FFTIGF(n::NTuple{3,Int}; T=Float64, backend=CPU(),
                 fft_flags=FFTW.MEASURE, cache_green::Bool=true,
-                pruned_fft::Bool=true, at_cathode::Bool=false)
+                pruned_fft::Bool=true, at_cathode::Bool=false,
+                field_method::Symbol=:direct)
     T in (Float32, Float64) || throw(ArgumentError("FFTIGF supports Float32 and Float64"))
     all(k -> k >= 2, n) || throw(ArgumentError("grid dimensions must be at least 2"))
     backend isa Union{CPU,GPU} || throw(ArgumentError("unsupported FFT backend"))
+    field_method in (:direct, :potential_fd) ||
+        throw(ArgumentError("field_method must be :direct or :potential_fd"))
     # Placeholder geometry; a particle-based solve establishes physical bounds.
     lo, hi = ntuple(_ -> zero(T), 3), ntuple(_ -> one(T), 3)
     delta = (hi .- lo) ./ (n .- 1)
     rho = KernelAbstractions.zeros(backend, T, n...)
     efield = KernelAbstractions.zeros(backend, T, n..., 3)
-    options = (;fft_flags, cache_green, pruned_fft, at_cathode)
+    options = (;fft_flags, cache_green, pruned_fft, at_cathode, field_method)
     return FFTIGF(n, lo, hi, delta, one(T), rho, efield, nothing, nothing,
                   options)
 end

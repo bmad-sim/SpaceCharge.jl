@@ -13,6 +13,7 @@ include("solvers/fftigf/workspace.jl")
 include("solvers/fftigf/deposition.jl")
 include("solvers/fftigf/interpolation.jl")
 include("solvers/fftigf/green_functions.jl")
+include("solvers/fftigf/potential.jl")
 include("solvers/fftigf/transforms.jl")
 include("solvers/fftigf/solve.jl")
 

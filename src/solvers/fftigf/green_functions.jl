@@ -13,11 +13,19 @@ This corresponds to the scalar potential.
     if r == zero(x)
         return zero(x)
     end
-    half = one(x) / 2
-    return -half * z^2 * atan(x * y / (z * r)) - half * y^2 * atan(x * z / (y * r)) -
-           half * x^2 * atan(y * z / (x * r)) + y * z * log(x + r) +
-           x * z * log(y + r) + x * y * log(z + r)
+    return _potential_atan_term(x, y, z, r) + _potential_atan_term(y, x, z, r) +
+           _potential_atan_term(z, x, y, r) + _potential_log_term(x, y, z, r) +
+           _potential_log_term(y, x, z, r) + _potential_log_term(z, x, y, r)
 end
+
+# Continuous limits of the same primitive on coordinate planes. Shifted image
+# cell corners can lie exactly on them; avoid 0*log(0) and 0*atan(0/0).
+@inline _potential_atan_term(a, b, c, r) =
+    iszero(a) ? zero(r) : -a^2 / 2 * atan(b * c / (a * r))
+# Rationalizing r+a for negative a avoids cancellation to log(0) when the
+# transverse coordinates are small. This is the same analytic primitive.
+@inline _potential_log_term(a, b, c, r) =
+    iszero(b) || iszero(c) ? zero(r) : b * c * log(a < 0 ? (b*b + c*c) / (r-a) : a+r)
 
 """
     field_green_function(x, y, z)

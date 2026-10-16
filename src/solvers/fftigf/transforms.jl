@@ -48,19 +48,23 @@ function _charge_transform!(mesh, w, p, image)
     return nothing
 end
 
-function _field_inverse!(mesh, w, ::Nothing, comp, factor, image)
+function _convolution_inverse!(mesh, w, ::Nothing)
     nx, ny, nz = mesh.grid_size
     mul!(w.result, w.backward, w.product)
-    _store_field!(mesh, view(w.result, nx:2nx-1, ny:2ny-1, nz:2nz-1), comp, factor, image)
+    return view(w.result, nx:2nx-1, ny:2ny-1, nz:2nz-1)
 end
 
-function _field_inverse!(mesh, w, p, comp, factor, image)
+function _convolution_inverse!(mesh, w, p)
     nx, ny, nz = mesh.grid_size
     p.b3 * w.product
     p.b2 * view(w.product, :, :, nz:2nz-1)
     mul!(p.result, p.b1, view(w.product, :, ny:2ny-1, nz:2nz-1))
     # y/z have already been cropped; x is still the complete real inverse.
-    _store_field!(mesh, view(p.result, nx:2nx-1, :, :), comp, factor, image)
+    return view(p.result, nx:2nx-1, :, :)
+end
+
+function _field_inverse!(mesh, w, p, comp, factor, image)
+    _store_field!(mesh, _convolution_inverse!(mesh, w, p), comp, factor, image)
 end
 
 function _store_field!(mesh, field, comp, factor, image)
