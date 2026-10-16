@@ -66,6 +66,8 @@ The original Fortran implementation is available in
 
 Bug reports and pull requests are welcome.
 
+See the [solver interface guide](docs/solver-interface.md) for implementing a solver.
+
 ## License
 
 SpaceCharge.jl is licensed under the [MIT License](LICENSE).
