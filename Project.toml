@@ -18,7 +18,7 @@ CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 SpaceChargeCUDAExt = "CUDA"
 
 [compat]
-CUDA = "5"
+CUDA = "~5.9.6"
 AtomicAndPhysicalConstants = "0.11.5"
 AbstractFFTs = "1.5"
 Atomix = "1.1"
