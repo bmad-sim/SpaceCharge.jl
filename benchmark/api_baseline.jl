@@ -54,10 +54,10 @@ function run_case(T, n, count)
     x,y,z=map(adapt,coords); q=adapt(q)
     bounds=(T.((-.01,-.01,-.01)),T.((.01,.01,.01)))
     a=Old.Mesh3D(n,bounds...;T,backend)
-    b=FFTIGF(n;T,backend,bounds,fft_flags=FFTW.ESTIMATE)
+    b=FFTIGF(n;T,backend,fft_flags=FFTW.ESTIMATE)
     oa=ntuple(_->similar(x),3); ob=ntuple(_->similar(x),3)
     oldsolve=()->(Old.deposit!(a,x,y,z,q);Old.solve!(a;fft_flags=FFTW.ESTIMATE))
-    newsolve=()->solve!(b,x,y,z,q)
+    newsolve=()->solve!(b,x,y,z,q;bounds)
     oldfield=()->Old.interpolate_field!(oa...,a,x,y,z)
     newfield=()->field!(ob...,b,x,y,z)
     setup_old=@elapsed (oldsolve();sync())
@@ -74,7 +74,7 @@ function run_case(T, n, count)
     ga=Ref(T(1));gb=Ref(T(1))
     report("changing gamma",
         ()->(ga[]+=T(.001);a.gamma=ga[];oldsolve()),
-        ()->(gb[]+=T(.001);solve!(b,x,y,z,q;gamma=gb[])),sync)
+        ()->(gb[]+=T(.001);solve!(b,x,y,z,q;gamma=gb[],bounds)),sync)
     if T == Float64
         adaptive=FFTIGF(n;T,backend,fft_flags=FFTW.ESTIMATE)
         solve!(adaptive,x,y,z,q)
@@ -89,7 +89,7 @@ function run_case(T, n, count)
             oldsolve()
         end
         report("adaptive prepare",oldfit!,()->solve!(adaptive,x,y,z,q),sync)
-        # Mutate the source geometry without allocating a new particle batch.
+        # Mutate the particle geometry without allocating a new particle batch.
         report("changing geometry",
             ()->(x .*= T(1.00001);oldfit!()),
             ()->(x .*= T(1.00001);solve!(adaptive,x,y,z,q)),sync)

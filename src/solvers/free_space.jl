@@ -2,31 +2,36 @@ using KernelAbstractions
 using AbstractFFTs
 using FFTW
 
-# Internal FFT stage; solver validity and options are handled by FFTIGF.
-function _solve_mesh!(mesh::Mesh3D; at_cathode::Bool=false, fft_flags=FFTW.MEASURE, cache_green::Bool=true, pruned_fft::Bool=true)
+# Internal FFT stage; public solve! entry points have already validated gamma.
+function _solve_mesh!(mesh::FFTIGF; gamma=mesh.gamma,
+                      at_cathode::Bool=mesh.options.at_cathode,
+                      fft_flags=mesh.options.fft_flags,
+                      cache_green::Bool=mesh.options.cache_green,
+                      pruned_fft::Bool=mesh.options.pruned_fft)
+    mesh.gamma = gamma
+    w = _get_workspace(mesh; fft_flags, pruned_fft)
     # Real charge field
     T = eltype(mesh.rho)
-    solve_freespace!(mesh; offset = (zero(T), zero(T), zero(T)), fft_flags, cache_green, pruned_fft)
+    _solve_freespace!(mesh, w, (zero(T), zero(T), zero(T)); cache_green)
 
     if at_cathode
         # Image charge at -z: reverse and negate directly into the FFT input.
         # Accumulate each component into the real field without an image mesh.
         offset_z = 2 * mesh.min_bounds[3] + (mesh.max_bounds[3] - mesh.min_bounds[3])
         offset = (zero(T), zero(T), offset_z)
-        _solve_freespace!(mesh, _get_workspace(mesh; fft_flags, pruned_fft), offset;
-                         cache_green, image=true)
+        _solve_freespace!(mesh, w, offset; cache_green, image=true)
     end
     return nothing
 end
 
 """
-    solve_freespace!(mesh::Mesh3D{T, A, B}; offset::NTuple{3, T} = (zero(T), zero(T), zero(T))) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
+    solve_freespace!(mesh::FFTIGF{T, A, B}; offset::NTuple{3, T} = (zero(T), zero(T), zero(T))) where {T<:AbstractFloat, A<:AbstractArray, B<:AbstractArray}
 
 Optimized free-space solver for computing electric field from charge density.
 Uses pre-allocated workspace arrays, cached real FFT plans, and CPU multi-threading for
 optimal performance on both CPU and GPU.
 """
-function solve_freespace!(mesh::Mesh3D{T};
+function solve_freespace!(mesh::FFTIGF{T};
     offset::NTuple{3,T}=(zero(T),zero(T),zero(T)), fft_flags=FFTW.MEASURE, cache_green::Bool=true, pruned_fft::Bool=true) where T
     _solve_freespace!(mesh, _get_workspace(mesh; fft_flags, pruned_fft), offset; cache_green)
 end
@@ -61,7 +66,7 @@ function _cached_spectra!(mesh, w, offset)
 end
 
 # Function barrier specializes the plans and buffers stored in the mesh.
-function _solve_freespace!(mesh::Mesh3D{T}, w, offset; cache_green=true, image=false) where T
+function _solve_freespace!(mesh::FFTIGF{T}, w, offset; cache_green=true, image=false) where T
     nx, ny, nz = mesh.grid_size
     _charge_transform!(mesh, w, w.pruned, image)
     greens = cache_green ? _cached_spectra!(mesh, w, offset) : nothing

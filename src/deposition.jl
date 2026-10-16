@@ -1,19 +1,21 @@
 using KernelAbstractions
 using Atomix
 
+@inline _inside(x, y, z, lo, hi) =
+    (lo[1] <= x) & (x <= hi[1]) & (lo[2] <= y) & (y <= hi[2]) &
+    (lo[3] <= z) & (z <= hi[3])
+
+# Closed upper faces belong to the last cell, with weight 1 on its upper node.
+@inline function _cell(x, lo, inv_delta, n)
+    u = (x - lo) * inv_delta
+    i = floor(Int, u)
+    return i < n - 1 ? (i, u - i) : (n - 2, one(x))
+end
+
 """
     deposit_particle!(rho, particle_x, particle_y, particle_z, particle_q, min_bounds, inv_delta; use_atomic=false)
 
-Core deposition algorithm for a single particle using Cloud-in-Cell (CIC) method.
-This is the shared logic between CPU and GPU implementations.
-
-# Arguments
-- `rho`: 3D charge density array to modify
-- `particle_x, particle_y, particle_z`: Single particle coordinates
-- `particle_q`: Single particle charge
-- `min_bounds`: Grid minimum bounds (x_min, y_min, z_min)
-- `inv_delta`: Reciprocal grid spacing, computed outside the particle loop
-- `use_atomic`: Whether to use atomic operations for thread safety
+Deposit a particle's charge onto eight neighboring nodes using CIC weights.
 """
 @inline function deposit_particle!(
     rho,
@@ -40,7 +42,6 @@ This is the shared logic between CPU and GPU implementations.
     charge = particle_q
 
     # --- 5. Deposit charge to all 8 neighboring grid points ---
-    # The public scatter pass has already validated the physical domain.
     @inbounds begin
         if use_atomic
             # Use atomic operations for thread safety (GPU)
@@ -66,12 +67,12 @@ This is the shared logic between CPU and GPU implementations.
     end
 end
 
-# Validate inside the scatter pass. Inactive values are never loaded.
+# Inactive coordinates and charges are never loaded.
 @inline function _deposit_one!(rho, x, y, z, q, i, lo, hi, inv_delta, active, atomic)
     if _active(active, i)
         @inbounds xi, yi, zi, qi = x[i], y[i], z[i], q[i]
         _inside(xi, yi, zi, lo, hi) && isfinite(qi) ||
-            error("active source must be finite and inside the FFT bounds")
+            error("active particle data must be finite and positions inside the FFT bounds")
         deposit_particle!(rho, xi, yi, zi, qi, lo, inv_delta; use_atomic=atomic)
     end
     return nothing
@@ -114,7 +115,7 @@ function _deposit_chunk_count(nparticles, ncells, element_bytes, nthreads)
                       div(nparticles, particles_per_chunk)))
 end
 
-function _get_deposit_workspace!(mesh::Mesh3D{T}, nchunks) where {T}
+function _get_deposit_workspace!(mesh::FFTIGF{T}, nchunks) where {T}
     scratch = mesh._deposit_workspace
     if scratch === nothing || length(scratch) < nchunks || size(first(scratch)) != size(mesh.rho)
         scratch = [Array{T,3}(undef, size(mesh.rho)) for _ in 1:nchunks]
@@ -157,7 +158,7 @@ end
 
 function deposit_cpu!(mesh, particles_x, particles_y, particles_z, particles_q, active)
     # Retain the serial generic-array path; private scratch is ordinary dense
-    # CPU storage, as are the normal Mesh3D CPU arrays.
+    # CPU storage, as are the normal FFTIGF CPU arrays.
     nchunks = mesh.rho isa Array && isbitstype(eltype(mesh.rho)) ? _deposit_chunk_count(length(particles_x),
         length(mesh.rho), sizeof(eltype(mesh.rho)), Threads.nthreads()) : 1
     if nchunks == 1

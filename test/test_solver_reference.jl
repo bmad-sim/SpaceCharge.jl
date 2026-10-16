@@ -68,13 +68,13 @@ function reference_test_mesh(T, grid_size, gamma)
     # Contract z with gamma to retain moderate cell aspect ratios in the rest
     # frame. This tests boosted normalization without the known ill-conditioning
     # of the old primitive's Float32 log((r-z)/(r+z)) at extreme aspect ratios.
-    mesh = FFTIGF(grid_size; bounds=((-0.023, -0.017, 0.011 / gamma),
-        (0.029, 0.021, 0.039 / gamma)), T=T).mesh
+    mesh = FFTIGF(grid_size; T)
+    SpaceCharge._set_grid_bounds!(mesh,((-0.023,-0.017,0.011/gamma),(0.029,0.021,0.039/gamma)))
     mesh.gamma = T(gamma)
     for k in 1:grid_size[3], j in 1:grid_size[2], i in 1:grid_size[1]
         mesh.rho[i, j, k] = T(1e-12 * (sin(0.7i + 0.3j - 0.2k) + 0.17cos(i + 2j + k)))
     end
-    # Unequal signed sources at opposite boundaries expose flips and shifts.
+    # Unequal signed charges at opposite boundaries expose flips and shifts.
     mesh.rho[1, end, 2] += T(7e-12)
     mesh.rho[end, 2, end] -= T(3e-12)
     return mesh
@@ -104,7 +104,6 @@ function run_solver_reference_tests()
     end
 end
 
-# Enable this test function once the public cache_green option is available.
 function run_solver_cache_reference_tests()
     @testset "Green cache invalidation against independent reference" begin
         @testset "$T, cathode=$at_cathode" for T in (Float32, Float64), at_cathode in (false, true)

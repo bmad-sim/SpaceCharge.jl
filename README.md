@@ -28,62 +28,51 @@ Pkg.add("SpaceCharge")
 
 ## Getting Started
 
-The `dev` API prepares a source separately from evaluating its electric field:
+The `dev` API prepares a field solution from particles separately from evaluating it:
 
 ```julia
 using SpaceCharge
 
 x = [-0.001, 0.001]; y = [0.0, 0.0]; z = [0.0, 0.0] # metres, lab frame
 charge = [0.5e-9, 0.5e-9] # signed macroparticle coulombs
-sc = FFTIGF((32, 32, 32); bounds=((-0.01,-0.01,-0.01), (0.01,0.01,0.01)))
+sc = FFTIGF((32, 32, 32))
 Ex, Ey, Ez = similar(x), similar(y), similar(z)
 solve!(sc, x, y, z, charge; gamma=1) # returns sc
 field!(Ex, Ey, Ez, sc, x, y, z)     # overwrites and returns (Ex, Ey, Ez), V/m
 ```
 
-Targets may be a different length from the source, and repeated `field!` calls
-reuse the frozen source even if the original source arrays have changed. Ordinary
-column views work without packing. Arrays must use the solver's Float32/Float64
-precision, one-based vector axes, and backend/device. Outputs must not overlap
-one another, targets, or solver storage. There is no implicit device transfer.
+Repeated `field!` calls reuse the frozen field at any evaluation points inside the
+FFT grid. Ordinary column views work without packing. Callers supply compatible
+Float32/Float64 arrays on one backend and call `solve!` before `field!`. Basic input
+checks are included; call-order tracking is intentionally omitted.
 
-Both operations accept `active=nothing` or a Boolean mask on the same backend.
-Inactive source coordinates and charges are never read; inactive target outputs
-are zero. Tracking state and conversion to signed coulombs remain caller-owned.
-Empty/all-inactive sources produce a valid zero solution. Active data must be
-finite, including coordinates of zero-charge particles.
+Both operations accept `active=nothing` or a Boolean mask. Inactive particle
+coordinates and charges are never read; inactive evaluation points receive zero.
+Empty/all-inactive particle batches are rejected; active zero-charge particles are valid.
 
-Omit `bounds` to fit active source positions on each combined solve. Explicit
-`bounds=(lo,hi)` are useful for fixed geometry, reproducible resolution, and probes
-outside the source extent. The domain includes both faces: the upper face uses
-the last cell. Active points outside the box are rejected. Collapsed adaptive axes
-expand symmetrically to nominal 1 micrometre cells, enlarged if needed for floating
-point resolution. Bounds that cannot represent distinct grid nodes are rejected.
-An empty adaptive source has no geometric restriction on finite targets.
-Adaptive GPU preparation reads a bounded extrema summary back to the host to
-establish geometry. Fixed bounds avoid this reduction and synchronization.
+Each `solve!(sc,x,y,z,charge)` fits bounds to the active particles. To override them
+for one call, use `solve!(sc,x,y,z,charge; bounds=(lo,hi))`. The next call without
+`bounds` fits again. Bounds are not a constructor option. Both grid faces are
+included. Collapsed adaptive axes expand to nominal 1 micrometre cells. Use nonnegative z bounds and particle positions with `at_cathode=true`.
+Supply lab z and signed macroparticle coulombs; the solver applies the gamma
+transformation once and returns lab E in V/m. Gamma defaults to 1 on every solve.
 
-`gamma` is finite and at least one, and defaults to **1 on every solve**. Supply
-physical lab z; the solver stretches longitudinal separations and boosts transverse
-E once. Outputs are lab E, without target charge, magnetic cancellation, or tracking
-kicks. `at_cathode=true` retains the image-charge E convention at z=0 and requires
-nonnegative z bounds/sources.
+For staged work, first establish geometry with a particle-based `solve!`. Then
+`deposit!(sc,x,y,z,charge; active,clear=true)` uses that current geometry;
+`clear=false` accumulates. Follow deposition with
+`solve!(sc;gamma=...)`, then `field!`. Empty/all-inactive additions with
+`clear=false` preserve existing charge; with `clear=true` they are rejected.
 
-For selective recomputation, use `deposit!(sc,x,y,z,charge; active,clear=true)` on
-fixed or previously fitted geometry, followed by `solve!(sc;gamma=...)`. Deposition
-invalidates the field; `clear=false` accumulates into a valid deposited source.
-An unprepared solver or failed refresh cannot be evaluated.
-
-Plans, spectra, and bounded deposition scratch are reusable and created on first
-preparation. Warm up with the expected batch size before timing. FFTW's thread
-setting is global: configure it before planning and do not change it concurrently
-with solves. `cache_green=false` bypasses spectrum caching; `pruned_fft=false`
-selects full CPU transforms. GPU transforms are always full. CUDA is optional;
-construct with `backend=get_backend(x)` after loading CUDA and KernelAbstractions.
-GPU work follows the calling stream; synchronize at host access/timing boundaries
-or before independent-stream use. Device data errors may surface at synchronization.
-Concurrent `field!` calls require disjoint outputs; never solve and evaluate the
-same instance concurrently.
+Plans, Green spectra and deposition scratch are reused after warm-up. Configure
+FFTW threads before planning. `cache_green=false` bypasses spectrum caching;
+`pruned_fft=false` selects full CPU transforms. GPU transforms are always full.
+For CUDA, load CUDA and KernelAbstractions and pass `backend=get_backend(x)`.
+Adaptive fitting uses a fused backend reduction and transfers only the final
+six-number extent to the host on GPU. The backend selects the launch and owns
+its temporary reduction storage. An explicit bounds override skips geometry
+reduction, though a supplied mask still needs an `any` reduction to reject
+all-inactive input. Synchronize GPU work for host
+access or timing.
 
 This replaces the mesh-based public API; no compatibility aliases are provided.
 

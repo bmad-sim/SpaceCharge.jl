@@ -1,237 +1,156 @@
-# Small reusable reduction storage for adaptive GPU geometry. No particle-sized
-# packing, masks, or temporary arrays are constructed by preparation.
-struct SourceExtent{T}
-    lo::NTuple{3,T}
-    hi::NTuple{3,T}
-    valid::Bool
-end
-_empty_extent(::Type{T}) where T = SourceExtent(ntuple(_ -> T(Inf), 3), ntuple(_ -> T(-Inf), 3), true)
-@inline function _merge_extent(a::SourceExtent, b::SourceExtent)
-    SourceExtent(min.(a.lo, b.lo), max.(a.hi, b.hi), a.valid & b.valid)
-end
-@inline function _source_extent(x, y, z, q, active, i)
-    T = eltype(x)
-    if _active(active, i)
-        @inbounds p = (x[i], y[i], z[i])
-        @inbounds valid = all(isfinite, p) && isfinite(q[i])
-        return SourceExtent(p, p, valid)
-    end
-    return _empty_extent(T)
-end
-
-@kernel function _extent_kernel!(out, x, y, z, q, active, stride)
-    tid = @index(Local, Linear)
-    group = @index(Group, Linear)
-    i = @index(Global, Linear)
-    partial = _empty_extent(eltype(x))
-    for j in i:stride:length(x)
-        partial = _merge_extent(partial, _source_extent(x, y, z, q, active, j))
-    end
-    shared = @localmem eltype(out) (256,)
-    shared[tid] = partial
-    @synchronize
-    for offset in (128, 64, 32, 16, 8, 4, 2, 1)
-        if tid <= offset
-            shared[tid] = _merge_extent(shared[tid], shared[tid + offset])
-        end
-        @synchronize
-    end
-    if tid == 1
-        out[group] = shared[1]
-    end
-end
-
 """
-    FFTIGF(grid_size; T=Float64, backend=CPU(), bounds=nothing,
+    FFTIGF(grid_size; T=Float64, backend=CPU(),
            fft_flags=FFTW.MEASURE, cache_green=true, pruned_fft=true,
            at_cathode=false)
 
-Reusable integrated-field Green-function FFT solver. `bounds=(lo, hi)` specifies
-a fixed closed box of grid nodes in metres; otherwise each combined `solve!` fits
-the active sources. All dimensions need at least two nodes. Upper faces use the
-last interpolation cell; active out-of-box sources and targets are errors.
-
-Adaptive nondegenerate extents retain the released 1e-6-cell padding (at least one
-representable step). A collapsed axis is expanded symmetrically to a nominal
-1 micrometre cell, or enough to resolve nodes at that coordinate's precision.
-Unrepresentable spacings are rejected. Use explicit bounds for controlled physical
-resolution and for probes outside the source extent. Adaptive GPU preparation
-reads a bounded extrema summary back to the host; fixed bounds avoid that reduction
-and synchronization.
-
-`at_cathode=true` retains the image-charge E convention at z=0 and requires
-nonnegative z bounds/sources. FFT plans, spectra and CPU deposition scratch are
-allocated lazily during preparation; warm up with the expected batch size before
-timing. The package does not change FFTW's global thread count: configure it before
-planning, and do not change it concurrently with solves. GPU always uses full FFTs.
+Reusable integrated-field Green-function FFT solver. Each particle-based `solve!`
+fits the active particles unless given `bounds=(lo, hi)` for that call.
+`at_cathode=true` adds the image-charge field at z=0. FFT plans, Green spectra,
+and deposition scratch are reused. GPU transforms are always full.
 """
-mutable struct FFTIGF{M,O,R,H}
-    mesh::M
+mutable struct FFTIGF{T <: AbstractFloat,A <: AbstractArray{T},B <: AbstractArray{T},O}
+    grid_size::NTuple{3,Int}
+    min_bounds::NTuple{3,T}
+    max_bounds::NTuple{3,T}
+    delta::NTuple{3,T}
+    gamma::T
+    rho::A
+    efield::B
+    _workspace::Union{Nothing,NamedTuple}
+    _deposit_workspace::Union{Nothing,Vector{Array{T,3}}}
     options::O
-    extent_device::R
-    extent_host::H
-    geometry::Bool
-    deposited::Bool
-    prepared::Bool
-    empty_source::Bool
 end
 
 function Base.show(io::IO, sc::FFTIGF)
-    print(io, "FFTIGF{", eltype(sc.mesh.rho), "}(", sc.mesh.grid_size,
-          ", ", get_backend(sc.mesh.rho), ", prepared=", sc.prepared, ")")
+    print(io, "FFTIGF{", eltype(sc.rho), "}(", sc.grid_size,
+          ", ", get_backend(sc.rho), ")")
 end
 
-function _geometry(n, lo, hi, ::Type{T}) where T
-    length(lo) == length(hi) == 3 || throw(ArgumentError("bounds need three coordinates"))
-    l, h = Tuple(T.(lo)), Tuple(T.(hi))
-    d = (h .- l) ./ (n .- 1)
-    for k in 1:3
-        isfinite(l[k]) && isfinite(h[k]) && h[k] > l[k] &&
-            isfinite(d[k]) && isfinite(inv(d[k])) && d[k] > 0 &&
-            d[k] >= max(eps(l[k]), eps(h[k])) ||
-            throw(ArgumentError("bounds must give finite, distinct grid nodes in $T"))
-    end
-    return l, h, d
-end
-
-function FFTIGF(n::NTuple{3,Int}; T=Float64, backend=CPU(), bounds=nothing,
+function FFTIGF(n::NTuple{3,Int}; T=Float64, backend=CPU(),
                 fft_flags=FFTW.MEASURE, cache_green::Bool=true,
                 pruned_fft::Bool=true, at_cathode::Bool=false)
     T in (Float32, Float64) || throw(ArgumentError("FFTIGF supports Float32 and Float64"))
     all(k -> k >= 2, n) || throw(ArgumentError("grid dimensions must be at least 2"))
     backend isa Union{CPU,GPU} || throw(ArgumentError("unsupported FFT backend"))
-    lo, hi, delta = bounds === nothing ? _geometry(n, (0,0,0), (1,1,1), T) :
-        _geometry(n, bounds[1], bounds[2], T)
-    at_cathode && lo[3] < 0 && throw(ArgumentError("cathode bounds require z >= 0"))
-    mesh = Mesh3D(n, lo, hi, backend)
-    options = (;adaptive=bounds === nothing, fft_flags, cache_green, pruned_fft, at_cathode)
-    device = backend isa CPU ? nothing : KernelAbstractions.allocate(backend, SourceExtent{T}, 128)
-    host = backend isa CPU ? nothing : Vector{SourceExtent{T}}(undef, 128)
-    return FFTIGF(mesh, options, device, host, bounds !== nothing, false, false, false)
+    # Placeholder geometry; a particle-based solve establishes physical bounds.
+    lo, hi = ntuple(_ -> zero(T), 3), ntuple(_ -> one(T), 3)
+    delta = (hi .- lo) ./ (n .- 1)
+    rho = KernelAbstractions.zeros(backend, T, n...)
+    efield = KernelAbstractions.zeros(backend, T, n..., 3)
+    options = (;fft_flags, cache_green, pruned_fft, at_cathode)
+    return FFTIGF(n, lo, hi, delta, one(T), rho, efield, nothing, nothing,
+                  options)
 end
 
-function _extent(sc, x, y, z, q, active)
-    result = _empty_extent(eltype(x))
-    isempty(x) && return result
-    if get_backend(sc.mesh.rho) isa CPU
-        @inbounds for i in eachindex(x)
-            result = _merge_extent(result, _source_extent(x, y, z, q, active, i))
-        end
-    else
-        groups = min(128, cld(length(x), 1024))
-        _extent_kernel!(get_backend(sc.mesh.rho), 256)(sc.extent_device, x, y, z, q,
-            active, 256groups; ndrange=256groups)
-        # Only the bounded summary crosses to the host, which must establish
-        # physical geometry before depositing. Fixed bounds avoid this reduction.
-        copyto!(sc.extent_host, 1, sc.extent_device, 1, groups)
-        for i in 1:groups
-            result = _merge_extent(result, sc.extent_host[i])
-        end
+function _particle_bounds(x, y, z, active=nothing)
+    T = eltype(x)
+    init = (lo=ntuple(_ -> T(Inf), 3), hi=ntuple(_ -> T(-Inf), 3))
+    isempty(x) && return init
+    @inline combine(a, b) = (lo=min.(a.lo, b.lo), hi=max.(a.hi, b.hi))
+    @inline point(a, b, c) = (lo=(a, b, c), hi=(a, b, c))
+    @inline function masked_point(keep, i, x, y, z)
+        keep || return init
+        p = @inbounds (x[i], y[i], z[i])
+        (lo=p, hi=p)
     end
-    result.valid || throw(ArgumentError("active source coordinates and charges must be finite"))
-    return result
+    points = active === nothing ? Base.Broadcast.broadcasted(point, x, y, z) :
+        Base.Broadcast.broadcasted(masked_point, active, eachindex(x), Ref(x), Ref(y), Ref(z))
+    return mapreduce(identity, combine, points; init)
 end
 
-function _fit_geometry!(sc, ext::SourceExtent{T}) where T
-    n = sc.mesh.grid_size
-    lo, hi = ext.lo, ext.hi
-    sc.options.at_cathode && lo[3] < 0 && throw(ArgumentError("cathode sources require z >= 0"))
+function _set_grid_bounds!(sc::FFTIGF{T}, bounds) where T
+    lo, hi = bounds
+    length(lo) == length(hi) == 3 || throw(ArgumentError("bounds need three coordinates"))
+    lo, hi = Tuple(T.(lo)), Tuple(T.(hi))
+    all(isfinite, lo) && all(isfinite, hi) && all(hi .> lo) ||
+        throw(ArgumentError("bounds must be finite with hi > lo"))
+    delta = (hi .- lo) ./ (sc.grid_size .- 1)
+    all(d -> isfinite(d) && d > 0 && isfinite(inv(d)), delta) ||
+        throw(ArgumentError("grid spacing must be finite and positive"))
+    sc.options.at_cathode && lo[3] < 0 && throw(ArgumentError("cathode bounds require z >= 0"))
+    sc.min_bounds, sc.max_bounds, sc.delta = lo, hi, delta
+    return nothing
+end
+
+# Compute padded grid bounds without changing the solver.
+function _grid_bounds_from_particles(sc::FFTIGF{T}, x, y, z, active) where T
+    n = sc.grid_size
+    particle_bounds = _particle_bounds(x, y, z, active)
+    lo, hi = particle_bounds.lo, particle_bounds.hi
+    all(isfinite, lo) && all(isfinite, hi) || throw(ArgumentError("active particle coordinates must be finite"))
+    sc.options.at_cathode && lo[3] < 0 && throw(ArgumentError("particles require z >= 0 with at_cathode=true"))
     pairs = ntuple(3) do k
-        l, h = lo[k], hi[k]
-        if l == h
+        lower = lo[k]
+        upper = hi[k]
+        if lower == upper
             # Enough precision to represent every node, even far from the origin.
-            step = max(T(1e-6), T(4) * eps(l))
-            halfspan = step * T(n[k] - 1) / 2
-            (l - halfspan, h + halfspan)
+            spacing = max(T(1e-6), T(4) * eps(lower))
+            half_span = spacing * T(n[k] - 1) / 2
+            lower_bound = lower - half_span
+            upper_bound = upper + half_span
         else
-            # Evaluate the released padding in Float64, then ensure it survives
-            # rounding to Float32. No snapping or approximate cache keys.
-            pad = 1e-6 * (Float64(h) - Float64(l)) / (n[k] - 1)
-            (min(T(l - pad), prevfloat(l)), max(T(h + pad), nextfloat(h)))
+            padding = T(1e-6) * (upper - lower) / (n[k] - 1)
+            lower_bound = lower - padding
+            upper_bound = upper + padding
         end
+        return lower_bound, upper_bound
     end
     l, h = first.(pairs), last.(pairs)
     if sc.options.at_cathode && l[3] < 0
         l = (l[1], l[2], zero(T))
     end
-    l, h, d = _geometry(n, l, h, T)
-    sc.mesh.min_bounds, sc.mesh.max_bounds, sc.mesh.delta = l, h, d
-    sc.geometry = true
+    return l, h
+end
+
+function _check_active_particles(x, active)
+    (isempty(x) || (active !== nothing && !any(active))) &&
+        throw(ArgumentError("at least one active particle is required"))
     return nothing
 end
 
-function solve!(sc::FFTIGF, x, y, z, charge; gamma=1, active=nothing)
-    sc.prepared = false
-    sc.deposited = false
-    g = _gamma(eltype(sc.mesh.rho), gamma)
-    _check_arrays(sc.mesh.rho, (x, y, z, charge), active)
-    sc.empty_source = false
-    if sc.options.adaptive
-        ext = _extent(sc, x, y, z, charge, active)
-        if ext.lo[1] == Inf
-            sc.geometry = false
-            sc.empty_source = true
-        else
-            _fit_geometry!(sc, ext)
-        end
+function solve!(sc::FFTIGF, x, y, z, charge; gamma=1, active=nothing, bounds=nothing)
+    _check_arrays(sc.rho, (x, y, z, charge), active)
+    g = _gamma(eltype(sc.rho), gamma)
+    _check_active_particles(x, active)
+    if bounds === nothing
+        bounds = _grid_bounds_from_particles(sc, x, y, z, active)
     end
-    if sc.empty_source
-        fill!(sc.mesh.rho, zero(eltype(sc.mesh.rho)))
-    else
-        _deposit!(sc.mesh, x, y, z, charge, active)
-    end
-    sc.deposited = true
-    return solve!(sc; gamma=g)
+    _set_grid_bounds!(sc, bounds)
+    _deposit!(sc, x, y, z, charge, active)
+    _solve_mesh!(sc; gamma=g)
+    return sc
 end
 
 """
     deposit!(solver::FFTIGF, x, y, z, charge; active=nothing, clear=true)
 
-Deposit lab charges on the existing geometry and invalidate the prepared field.
-Requires explicit constructor bounds or geometry from a previous combined solve.
-`clear=false` accumulates charge. Follow with `solve!(solver; gamma=1)`.
+Deposit on geometry established by the last particle-based `solve!`.
+`clear=false` accumulates charge.
+Empty/all-inactive input is an error with `clear=true` and adds nothing with
+`clear=false`. Follow with `solve!(solver; gamma=1)`.
 """
-
 function deposit!(sc::FFTIGF, x, y, z, charge; active=nothing, clear::Bool=true)
-    sc.prepared = false
-    was_deposited = sc.deposited
-    sc.deposited = false
-    sc.geometry || throw(ArgumentError("deposit! requires fixed bounds or a previous source geometry"))
-    (clear || was_deposited) || throw(ArgumentError("clear=false requires a valid deposited source"))
-    _check_arrays(sc.mesh.rho, (x, y, z, charge), active)
-    _deposit!(sc.mesh, x, y, z, charge, active; clear)
-    sc.empty_source = false
-    sc.deposited = true
+    _check_arrays(sc.rho, (x, y, z, charge), active)
+    clear && _check_active_particles(x, active)
+    _deposit!(sc, x, y, z, charge, active; clear)
     return sc
 end
 
 """
     solve!(solver::FFTIGF; gamma=1)
 
-Convolve the existing deposited source without refitting geometry or redepositing.
+Convolve the existing deposited charge without refitting geometry or redepositing.
 Returns `solver`. Omitting `gamma` resets it to 1, including after a relativistic solve.
 """
 function solve!(sc::FFTIGF; gamma=1)
-    sc.prepared = false
-    g = _gamma(eltype(sc.mesh.rho), gamma)
-    sc.deposited || throw(ArgumentError("solve! requires a deposited source"))
-    sc.mesh.gamma = g
-    if sc.empty_source
-        fill!(sc.mesh.efield, zero(eltype(sc.mesh.rho)))
-    else
-        o = sc.options
-        _solve_mesh!(sc.mesh; o.at_cathode, o.fft_flags, o.cache_green, o.pruned_fft)
-    end
-    sc.prepared = true
+    _solve_mesh!(sc; gamma=_gamma(eltype(sc.rho), gamma))
     return sc
 end
 
 function field!(Ex, Ey, Ez, sc::FFTIGF, x, y, z; active=nothing)
-    sc.prepared || throw(ArgumentError("field! requires a successful solve!"))
-    _check_arrays(sc.mesh.rho, (x, y, z, Ex, Ey, Ez), active)
+    _check_arrays(sc.rho, (x, y, z, Ex, Ey, Ez), active)
     isempty(x) && return (Ex, Ey, Ez)
-    m = sc.mesh
-    interpolate_kernel!(get_backend(m.rho))(Ex, Ey, Ez, m.efield, x, y, z,
-        m.min_bounds, inv.(m.delta), m.max_bounds, active, Val(sc.empty_source); ndrange=length(x))
+    interpolate_kernel!(get_backend(sc.rho))(Ex, Ey, Ez, sc.efield, x, y, z,
+        sc.min_bounds, inv.(sc.delta), sc.max_bounds, active; ndrange=length(x))
     return Ex, Ey, Ez
 end

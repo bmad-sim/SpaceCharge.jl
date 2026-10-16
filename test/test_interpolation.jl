@@ -3,10 +3,10 @@ using Test, SpaceCharge
 function run_interpolation_tests()
     @testset "Gather domain, views and read-only evaluation" begin
         for T in (Float32,Float64)
-            sc = FFTIGF((5,6,7);T,bounds=((-2,-3,-4),(2,3,4)),fft_flags=FFTW.ESTIMATE)
+            sc = FFTIGF((5,6,7);T,fft_flags=FFTW.ESTIMATE)
+            SpaceCharge._set_grid_bounds!(sc,((-2,-3,-4),(2,3,4)))
             empty = T[]
-            solve!(sc,empty,empty,empty,empty)
-            mesh=sc.mesh
+            mesh=sc
             # Internal manufactured grid tests the gather independently of FFTs.
             linear(x,y,z)=(2x-3y+z+1,-x+4y+2z-2,3x+y-2z+3)
             for k in 1:7,j in 1:6,i in 1:5
@@ -40,6 +40,9 @@ function run_interpolation_tests()
             for bad in (T(NaN),T(Inf),nextfloat(T(2)),prevfloat(T(-2)))
                 @test_throws Exception field!(zeros(T,1),zeros(T,1),zeros(T,1),sc,T[bad],T[0],T[0])
             end
+            zero_source=FFTIGF((4,4,4);T,fft_flags=FFTW.ESTIMATE)
+            a=T[0]; solve!(zero_source,a,a,a,a)
+            @test_throws Exception field!(zeros(T,1),zeros(T,1),zeros(T,1),zero_source,T[NaN],T[0],T[0])
         end
     end
 end

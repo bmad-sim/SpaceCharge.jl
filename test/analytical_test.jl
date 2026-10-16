@@ -32,7 +32,7 @@ using SpecialFunctions
     grid_size = (32, 32, 32)
     sc = FFTIGF(grid_size; fft_flags=FFTW.ESTIMATE)
     solve!(sc, particles_x, particles_y, particles_z, particles_q)
-    # Independent target batch along the physical axis, in metres.
+    # Independent evaluation points along the physical axis, in metres.
     z_coords = collect(range(-0.004, 0.004; length=101))
     zeros_xy = zeros(length(z_coords))
     outputs = ntuple(_ -> similar(z_coords), 3)

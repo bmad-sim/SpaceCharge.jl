@@ -7,7 +7,7 @@ function run_pruned_fft_tests()
             mesh = reference_test_mesh(T, n, 1.0)
             w = SpaceCharge._get_workspace(mesh; fft_flags=FFTW.ESTIMATE, pruned_fft=true)
             tol = T == Float32 ? 3e-6 : 2e-14
-            # Repeated calls with changed signed sources expose stale padding.
+            # Repeated calls with changed signed charges expose stale padding.
             for image in (false, true, false)
                 mesh.rho .= randn(rng, T, n...)
                 SpaceCharge._charge_transform!(mesh, w, w.pruned, image)

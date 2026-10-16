@@ -27,7 +27,7 @@ function compare_cpu_gpu_deposit(grid_size, n_particles)
     solve!(mesh_cpu, particles_x, particles_y, particles_z, particles_q)
 
     cpu_time = @belapsed deposit!($mesh_cpu, $particles_x, $particles_y, $particles_z, $particles_q)
-    cpu_charge = sum(mesh_cpu.mesh.rho)
+    cpu_charge = sum(mesh_cpu.rho)
     cpu_error = abs(expected_charge - cpu_charge) / expected_charge * 100
 
     println("CPU: $(round(cpu_time * 1000, digits=2)) ms (error: $(round(cpu_error, digits=8))%)")
@@ -55,7 +55,7 @@ function compare_cpu_gpu_deposit(grid_size, n_particles)
             CUDA.synchronize()
         end
 
-        gpu_charge = sum(Array(mesh_gpu.mesh.rho))
+        gpu_charge = sum(Array(mesh_gpu.rho))
         gpu_error = abs(expected_charge - gpu_charge) / expected_charge * 100
         speedup = cpu_time / gpu_time
 

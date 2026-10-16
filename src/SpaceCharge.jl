@@ -6,14 +6,13 @@ using LinearAlgebra: mul!
 
 include("utils.jl")
 include("interface.jl")
-include("mesh.jl")
+include("solvers/fftigf.jl")
+include("fft/workspace.jl")
 include("deposition.jl")
 include("interpolation.jl")
 include("green_functions.jl")
 include("fft/transforms.jl")
 include("solvers/free_space.jl")
-
-include("solvers/fftigf.jl")
 
 export FFTIGF, solve!, field!, deposit!
 

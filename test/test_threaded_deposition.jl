@@ -25,8 +25,10 @@ function run_threaded_deposition_tests()
                 n = 3001  # Intentionally not a multiple of the chunk count.
                 x, y, z = (T(0.001) .+ T(0.998) .* rand(rng, T, n) for _ in 1:3)
                 q = randn(rng, T, n) .* T(1e-9)
-                reference = FFTIGF((7, 9, 11); bounds=((0., 0., 0.), (1., 1., 1.)), T).mesh
-                mesh = FFTIGF((7, 9, 11); bounds=((0., 0., 0.), (1., 1., 1.)), T).mesh
+                reference = FFTIGF((7, 9, 11); T)
+                mesh = FFTIGF((7, 9, 11); T)
+                SpaceCharge._set_grid_bounds!(reference,((0.,0.,0.),(1.,1.,1.)))
+                SpaceCharge._set_grid_bounds!(mesh,((0.,0.,0.),(1.,1.,1.)))
                 SpaceCharge.deposit_vectorized!(reference, x, y, z, q)
                 scratch = SpaceCharge._get_deposit_workspace!(mesh, 5)
                 SpaceCharge._deposit_threaded!(mesh, x, y, z, q, scratch, 5)
@@ -51,9 +53,11 @@ function run_threaded_deposition_tests()
             n = 83_017
             x, y, z = (0.001 .+ 0.998 .* rand(rng, n) for _ in 1:3)
             q = randn(rng, n) .* 1e-12
-            sc = FFTIGF((9, 11, 13); bounds=((0., 0., 0.), (1., 1., 1.)))
-            mesh = sc.mesh
-            reference = FFTIGF((9, 11, 13); bounds=((0., 0., 0.), (1., 1., 1.))).mesh
+            sc = FFTIGF((9, 11, 13);fft_flags=FFTW.ESTIMATE)
+            mesh = sc
+            reference = FFTIGF((9, 11, 13);fft_flags=FFTW.ESTIMATE)
+            SpaceCharge._set_grid_bounds!(reference,((0.,0.,0.),(1.,1.,1.)))
+            solve!(sc,x,y,z,q;bounds=((0.,0.,0.),(1.,1.,1.)))
             SpaceCharge.deposit_vectorized!(reference, x, y, z, q)
             # No :static loop or threadid-indexed scratch: called from a task.
             fetch(Threads.@spawn deposit!(sc, x, y, z, q))
@@ -70,13 +74,15 @@ function run_threaded_deposition_tests()
             @test mesh._deposit_workspace === scratch
             deposit!(sc, x, y, z, q; clear=true)
             @test isapprox(mesh.rho, reference.rho; rtol=128eps(Float64), atol)
-            # The small/empty fallback preserves clear=false and clear=true.
+            # Empty additions preserve charge; empty replacements are rejected.
             before_empty = copy(mesh.rho)
             empty = Float64[]
             deposit!(sc, empty, empty, empty, empty; clear=false)
             @test mesh.rho == before_empty
-            deposit!(sc, empty, empty, empty, empty; clear=true)
-            @test all(iszero, mesh.rho)
+            @test_throws ArgumentError deposit!(sc, empty, empty, empty, empty; clear=true)
+            @test mesh.rho == before_empty
+            deposit!(sc,fill(NaN,n),fill(NaN,n),fill(NaN,n),fill(NaN,n); active=falses(n),clear=false)
+            @test mesh.rho == before_empty
             # A packed Boolean mask also skips invalid data in threaded batches.
             mask=trues(n);mask[2]=false;x[2]=NaN;q[2]=Inf
             fill!(reference.rho,0)
