@@ -1,7 +1,7 @@
 # CPU Function-Level Profiling Script for Full Pipeline
 #
 # Usage:
-#   julia --project benchmark/full_pipeline_benchmark_profile.jl
+#   julia --project=benchmark benchmark/full_pipeline_profile.jl
 #
 # This script profiles the CPU full pipeline (deposit! + solve! + field!)
 # using Julia's built-in Profile and optionally StatProfilerHTML for an HTML report.
@@ -13,7 +13,9 @@ using SpaceCharge
 using Random
 using CUDA
 using Profile
-using StatProfilerHTML
+if Base.find_package("StatProfilerHTML") !== nothing
+    using StatProfilerHTML
+end
 
 # Standalone CPU full pipeline for profiling
 function run_cpu_full_pipeline(grid_size, n_particles; total_charge=1.0e-9, sigma=0.001)
@@ -57,7 +59,7 @@ function run_gpu_full_pipeline(grid_size, n_particles; total_charge=1.0e-9, sigm
 end
 
 function print_usage()
-    println("Usage: julia --project benchmark/full_pipeline_profile.jl [--cpu|--gpu|--both]")
+    println("Usage: julia --project=benchmark benchmark/full_pipeline_profile.jl [--cpu|--gpu|--both]")
     println("  --cpu   Profile only the CPU full pipeline")
     println("  --gpu   Profile only the GPU full pipeline")
     println("  --both  Profile both CPU and GPU (default)")
@@ -97,8 +99,8 @@ function main()
                 Profile.print(io)
             end
             println("[Info] CPU profile output written to profile_output.txt")
-            # Optional: Uncomment to view HTML report (requires StatProfilerHTML)
-            statprofilehtml()
+            # Optional HTML report when StatProfilerHTML is installed.
+            isdefined(@__MODULE__, :statprofilehtml) && statprofilehtml()
         catch e
             println("[Warning] Profiling tools not available: $e")
         end

@@ -35,7 +35,8 @@ function main()
 
     sc = FFTIGF(grid_size)
     solve!(sc, particles_x, particles_y, particles_z, particles_q)
-    z_coords = collect(range(-0.004,0.004;length=101))
+    # Keep evaluation points inside the fitted domain.
+    z_coords = collect(range(max(sc.min_bounds[3],-0.004),min(sc.max_bounds[3],0.004);length=101))
     xy = zeros(length(z_coords))
     fields = ntuple(_->similar(z_coords),3)
     field!(fields...,sc,xy,xy,z_coords)
@@ -51,7 +52,7 @@ function main()
     plot(z_coords, computed_Ez, label="Computed Ez", xlabel="Z-coordinate (m)", ylabel="Ez Field (V/m)",
          title="Ez Field along Centerline of isotropic 1nC bunch (x=0, y=0)", linewidth=2)
     plot!(z_coords, analytical_Ez, label="Analytical Ez", linestyle=:dash, linewidth=2)
-    savefig("examples/Ez_comparison.png")
+    savefig(joinpath(@__DIR__,"Ez_comparison.png"))
 
     println("Plot saved to Ez_comparison.png")
 end
