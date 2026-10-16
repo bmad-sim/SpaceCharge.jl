@@ -31,8 +31,19 @@ end
 end
 
 function _charge_transform!(mesh, w, ::Nothing, image)
-    _prepare_charge!(get_backend(mesh.rho))(w.pad, mesh.rho, image;
-                                           ndrange=size(w.pad))
+    backend = get_backend(mesh.rho)
+    if backend isa CPU
+        _prepare_charge!(backend)(w.pad, mesh.rho, image; ndrange=size(w.pad))
+    else
+        # GPU arrays provide efficient native fill and crop-copy operations.
+        nx, ny, nz = mesh.grid_size
+        fill!(w.pad, zero(eltype(w.pad)))
+        if image
+            @views @. w.pad[1:nx, 1:ny, 1:nz] = -mesh.rho[:, :, nz:-1:1]
+        else
+            @views w.pad[1:nx, 1:ny, 1:nz] .= mesh.rho
+        end
+    end
     mul!(w.rhohat, w.forward, w.pad)
     return nothing
 end
