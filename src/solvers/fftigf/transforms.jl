@@ -73,11 +73,17 @@ function _field_inverse!(mesh, w, p, comp, factor, image)
     _store_field!(mesh, _convolution_inverse!(mesh, w, p), comp, factor, image)
 end
 
-function _store_field!(mesh, field, comp, factor, image)
-    if image
-        @views @. mesh.efield[:, :, :, comp] += factor * field
+@kernel function _store_field_kernel!(out, @Const(field), comp, factor, image)
+    I = @index(Global, Cartesian)
+    @inbounds if image
+        out[I, comp] += factor * field[I]
     else
-        @views @. mesh.efield[:, :, :, comp] = factor * field
+        out[I, comp] = factor * field[I]
     end
+end
+
+function _store_field!(mesh, field, comp, factor, image)
+    _store_field_kernel!(get_backend(mesh.efield))(mesh.efield, field, comp, factor, image;
+                                                  ndrange=size(field))
     return nothing
 end
