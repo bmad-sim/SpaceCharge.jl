@@ -23,11 +23,11 @@ function compare_cpu_gpu_full_pipeline(grid_size, n_particles; total_charge=1.0e
     # CPU benchmark
     println("Benchmarking CPU...")
     mesh_cpu = FFTIGF(grid_size)
-    solve!(mesh_cpu, particles_x, particles_y, particles_z, particles_q)
+    solve!(mesh_cpu, particles_x, particles_y, particles_z, particles_q, 1)
     outputs_cpu = ntuple(_ -> similar(particles_x), 3)
     cpu_time = @belapsed begin
         deposit!($mesh_cpu, $particles_x, $particles_y, $particles_z, $particles_q)
-        solve!($mesh_cpu)
+        solve!($mesh_cpu,1)
         field!($(outputs_cpu)..., $mesh_cpu, $particles_x, $particles_y, $particles_z)
     end
     println("CPU: $(round(cpu_time * 1000, digits=2)) ms")
@@ -42,11 +42,11 @@ function compare_cpu_gpu_full_pipeline(grid_size, n_particles; total_charge=1.0e
         particles_z_gpu = CuArray(particles_z)
         particles_q_gpu = CuArray(particles_q)
         mesh_gpu = FFTIGF(grid_size; backend=CUDABackend())
-        solve!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
+        solve!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu, 1)
         outputs_gpu = ntuple(_ -> similar(particles_x_gpu), 3)
         gpu_time = @belapsed begin
             deposit!($mesh_gpu, $particles_x_gpu, $particles_y_gpu, $particles_z_gpu, $particles_q_gpu)
-            solve!($mesh_gpu)
+            solve!($mesh_gpu,1)
             field!($(outputs_gpu)..., $mesh_gpu, $particles_x_gpu, $particles_y_gpu, $particles_z_gpu)
             CUDA.synchronize()
         end

@@ -44,7 +44,7 @@ function FFTIGF(n::NTuple{3,Int}; T=Float64, backend=CPU(),
                   options)
 end
 
-function _particle_bounds(x, y, z, active=nothing)
+function _particle_bounds(x, y, z, mask=nothing)
     T = eltype(x)
     init = (lo=ntuple(_ -> T(Inf), 3), hi=ntuple(_ -> T(-Inf), 3))
     isempty(x) && return init
@@ -55,8 +55,8 @@ function _particle_bounds(x, y, z, active=nothing)
         p = @inbounds (x[i], y[i], z[i])
         (lo=p, hi=p)
     end
-    points = active === nothing ? Base.Broadcast.broadcasted(point, x, y, z) :
-        Base.Broadcast.broadcasted(masked_point, active, eachindex(x), Ref(x), Ref(y), Ref(z))
+    points = mask === nothing ? Base.Broadcast.broadcasted(point, x, y, z) :
+        Base.Broadcast.broadcasted(masked_point, mask, eachindex(x), Ref(x), Ref(y), Ref(z))
     return mapreduce(identity, combine, points; init)
 end
 
@@ -74,9 +74,9 @@ function _set_grid_bounds!(sc::FFTIGF{T}, bounds) where T
 end
 
 # Compute padded grid bounds without changing the solver.
-function _grid_bounds_from_particles(sc::FFTIGF{T}, x, y, z, active) where T
+function _grid_bounds_from_particles(sc::FFTIGF{T}, x, y, z, mask) where T
     n = sc.grid_size
-    particle_bounds = _particle_bounds(x, y, z, active)
+    particle_bounds = _particle_bounds(x, y, z, mask)
     lo, hi = particle_bounds.lo, particle_bounds.hi
     all(isfinite, lo) && all(isfinite, hi) || throw(ArgumentError("active particle coordinates must be finite"))
     pairs = ntuple(3) do k
@@ -98,56 +98,57 @@ function _grid_bounds_from_particles(sc::FFTIGF{T}, x, y, z, active) where T
     return first.(pairs), last.(pairs)
 end
 
-function _check_active_particles(x, active)
-    (isempty(x) || (active !== nothing && !any(active))) &&
+function _check_particle_presence(x, mask)
+    (isempty(x) || (mask !== nothing && !any(mask))) &&
         throw(ArgumentError("at least one active particle is required"))
     return nothing
 end
 
-function solve!(sc::FFTIGF, x, y, z, charge; gamma=1, active=nothing, bounds=nothing)
-    _check_arrays(sc.rho, (x, y, z, charge), active)
+function solve!(sc::FFTIGF, x, y, z, charge, gamma; mask=nothing, bounds=nothing)
+    _check_arrays(sc.rho, (x, y, z, charge), mask)
     g = _gamma(eltype(sc.rho), gamma)
-    _check_active_particles(x, active)
+    _check_particle_presence(x, mask)
     if bounds === nothing
-        bounds = _grid_bounds_from_particles(sc, x, y, z, active)
+        bounds = _grid_bounds_from_particles(sc, x, y, z, mask)
     end
     _set_grid_bounds!(sc, bounds)
-    _deposit!(sc, x, y, z, charge, active)
+    _deposit!(sc, x, y, z, charge, mask)
     _solve_mesh!(sc; gamma=g)
     return nothing
 end
 
 """
-    deposit!(solver::FFTIGF, x, y, z, charge; active=nothing, clear=true)
+    deposit!(solver::FFTIGF, x, y, z, charge; mask=nothing, clear=true)
 
 Deposit on geometry established by the last particle-based `solve!`.
 Active positions must be finite and inside its closed bounds; active charges must be finite.
 `clear=false` accumulates charge.
 Empty/all-inactive input is an error with `clear=true` and adds nothing with
-`clear=false`. Follow with `solve!(solver; gamma=1)`.
+`clear=false`. Follow with `solve!(solver, gamma)` using the desired Lorentz factor.
 """
-function deposit!(sc::FFTIGF, x, y, z, charge; active=nothing, clear::Bool=true)
-    _check_arrays(sc.rho, (x, y, z, charge), active)
-    clear && _check_active_particles(x, active)
-    _deposit!(sc, x, y, z, charge, active; clear)
+function deposit!(sc::FFTIGF, x, y, z, charge; mask=nothing, clear::Bool=true)
+    _check_arrays(sc.rho, (x, y, z, charge), mask)
+    clear && _check_particle_presence(x, mask)
+    _deposit!(sc, x, y, z, charge, mask; clear)
     return sc
 end
 
 """
-    solve!(solver::FFTIGF; gamma=1)
+    solve!(solver::FFTIGF, gamma)
 
 Convolve the existing deposited charge without refitting geometry or redepositing.
-Returns `nothing`. Omitting `gamma` resets it to 1, including after a relativistic solve.
+Returns `nothing`. Supply positional `gamma` on every call; pass `1` for
+stationary calculations.
 """
-function solve!(sc::FFTIGF; gamma=1)
+function solve!(sc::FFTIGF, gamma)
     _solve_mesh!(sc; gamma=_gamma(eltype(sc.rho), gamma))
     return nothing
 end
 
-function field!(Ex, Ey, Ez, sc::FFTIGF, x, y, z; active=nothing)
-    _check_arrays(sc.rho, (x, y, z, Ex, Ey, Ez), active)
+function field!(Ex, Ey, Ez, sc::FFTIGF, x, y, z; mask=nothing)
+    _check_arrays(sc.rho, (x, y, z, Ex, Ey, Ez), mask)
     isempty(x) && return (Ex, Ey, Ez)
     interpolate_kernel!(get_backend(sc.rho))(Ex, Ey, Ez, sc.efield, x, y, z,
-        sc.min_bounds, inv.(sc.delta), active; ndrange=length(x))
+        sc.min_bounds, inv.(sc.delta), mask; ndrange=length(x))
     return Ex, Ey, Ez
 end

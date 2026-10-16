@@ -61,32 +61,32 @@ Deposit a particle's charge onto eight neighboring nodes using CIC weights.
 end
 
 # Inactive coordinates and charges are never loaded.
-@inline function _deposit_one!(rho, x, y, z, q, i, lo, inv_delta, active, atomic)
-    if _active(active, i)
+@inline function _deposit_one!(rho, x, y, z, q, i, lo, inv_delta, mask, atomic)
+    if _is_included(mask, i)
         @inbounds xi, yi, zi, qi = x[i], y[i], z[i], q[i]
         deposit_particle!(rho, xi, yi, zi, qi, lo, inv_delta; use_atomic=atomic)
     end
     return nothing
 end
 
-@kernel function deposit_kernel!(rho, x, y, z, q, lo, inv_delta, active)
+@kernel function deposit_kernel!(rho, x, y, z, q, lo, inv_delta, mask)
     i = @index(Global, Linear)
-    _deposit_one!(rho, x, y, z, q, i, lo, inv_delta, active, true)
+    _deposit_one!(rho, x, y, z, q, i, lo, inv_delta, mask, true)
 end
 
-function deposit_gpu!(mesh, x, y, z, q, active)
+function deposit_gpu!(mesh, x, y, z, q, mask)
     isempty(x) && return nothing
     deposit_kernel!(get_backend(mesh.rho))(mesh.rho, x, y, z, q,
-        mesh.min_bounds, inv.(mesh.delta), active;
+        mesh.min_bounds, inv.(mesh.delta), mask;
         ndrange=length(x), workgroupsize=256)
     return nothing
 end
 
-function deposit_vectorized!(mesh, x, y, z, q, active=nothing)
+function deposit_vectorized!(mesh, x, y, z, q, mask=nothing)
     inv_delta = inv.(mesh.delta)
     @inbounds for i in eachindex(x)
         _deposit_one!(mesh.rho, x, y, z, q, i, mesh.min_bounds,
-                      inv_delta, active, false)
+                      inv_delta, mask, false)
     end
     return nothing
 end
@@ -115,7 +115,7 @@ function _get_deposit_workspace!(mesh::FFTIGF{T}, nchunks) where {T}
     return scratch
 end
 
-function _deposit_threaded!(mesh, particles_x, particles_y, particles_z, particles_q, scratch, nchunks, active=nothing)
+function _deposit_threaded!(mesh, particles_x, particles_y, particles_z, particles_q, scratch, nchunks, mask=nothing)
     n = length(particles_x)
     bounds, inv_delta = mesh.min_bounds, inv.(mesh.delta)
     # Scratch belongs to the logical chunk, not the worker thread. Task
@@ -127,7 +127,7 @@ function _deposit_threaded!(mesh, particles_x, particles_y, particles_z, particl
         last_particle = div(n * chunk, nchunks)
         @inbounds for i in first_particle:last_particle
             _deposit_one!(grid, particles_x, particles_y, particles_z, particles_q,
-                          i, bounds, inv_delta, active, false)
+                          i, bounds, inv_delta, mask, false)
         end
     end
     rho = mesh.rho
@@ -147,27 +147,27 @@ function _deposit_threaded!(mesh, particles_x, particles_y, particles_z, particl
     return nothing
 end
 
-function deposit_cpu!(mesh, particles_x, particles_y, particles_z, particles_q, active)
+function deposit_cpu!(mesh, particles_x, particles_y, particles_z, particles_q, mask)
     # Retain the serial generic-array path; private scratch is ordinary dense
     # CPU storage, as are the normal FFTIGF CPU arrays.
     nchunks = mesh.rho isa Array && isbitstype(eltype(mesh.rho)) ? _deposit_chunk_count(length(particles_x),
         length(mesh.rho), sizeof(eltype(mesh.rho)), Threads.nthreads()) : 1
     if nchunks == 1
-        deposit_vectorized!(mesh, particles_x, particles_y, particles_z, particles_q, active)
+        deposit_vectorized!(mesh, particles_x, particles_y, particles_z, particles_q, mask)
     else
         scratch = _get_deposit_workspace!(mesh, nchunks)
         _deposit_threaded!(mesh, particles_x, particles_y, particles_z, particles_q,
-                           scratch, nchunks, active)
+                           scratch, nchunks, mask)
     end
     return nothing
 end
 
-function _deposit!(mesh, x, y, z, q, active; clear=true)
+function _deposit!(mesh, x, y, z, q, mask; clear=true)
     clear && fill!(mesh.rho, zero(eltype(mesh.rho)))
     if get_backend(mesh.rho) isa CPU
-        deposit_cpu!(mesh, x, y, z, q, active)
+        deposit_cpu!(mesh, x, y, z, q, mask)
     else
-        deposit_gpu!(mesh, x, y, z, q, active)
+        deposit_gpu!(mesh, x, y, z, q, mask)
     end
     return nothing
 end

@@ -42,10 +42,10 @@ function test_correctness(grid_size, n_particles; total_charge=1.0e-9, sigma=0.0
 
     # Create mesh and deposit charge
     mesh = FFTIGF(grid_size)
-    solve!(mesh, particles_x, particles_y, particles_z, particles_q)
+    solve!(mesh, particles_x, particles_y, particles_z, particles_q, 1)
 
     # Solve for fields
-    solve!(mesh)
+    solve!(mesh,1)
 
     # Extract data for comparison along z-axis (x=0, y=0)
     z_coords = collect(range(max(minimum(particles_z),-4sigma),
@@ -86,9 +86,9 @@ function compare_cpu_gpu_solve(grid_size, n_particles; total_charge=1.0e-9, sigm
     # CPU benchmark
     println("Benchmarking CPU...")
     mesh_cpu = FFTIGF(grid_size)
-    solve!(mesh_cpu, particles_x, particles_y, particles_z, particles_q)
+    solve!(mesh_cpu, particles_x, particles_y, particles_z, particles_q, 1)
     deposit!(mesh_cpu, particles_x, particles_y, particles_z, particles_q)
-    cpu_time = @belapsed solve!($mesh_cpu)
+    cpu_time = @belapsed solve!($mesh_cpu,1)
 
     # Correctness: compare Ez along z-axis to analytical
     z_coords = collect(range(max(minimum(particles_z),-4sigma),
@@ -113,10 +113,10 @@ function compare_cpu_gpu_solve(grid_size, n_particles; total_charge=1.0e-9, sigm
         particles_z_gpu = CuArray(particles_z)
         particles_q_gpu = CuArray(particles_q)
         mesh_gpu = FFTIGF(grid_size; backend=CUDABackend())
-        solve!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
+        solve!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu, 1)
         deposit!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
         gpu_time = @belapsed begin
-            solve!($mesh_gpu)
+            solve!($mesh_gpu,1)
             CUDA.synchronize()
         end
         # Compare Ez along z-axis

@@ -57,7 +57,7 @@ function run_threaded_deposition_tests()
             mesh = sc
             reference = FFTIGF((9, 11, 13);fft_flags=FFTW.ESTIMATE)
             SpaceCharge._set_grid_bounds!(reference,((0.,0.,0.),(1.,1.,1.)))
-            solve!(sc,x,y,z,q;bounds=((0.,0.,0.),(1.,1.,1.)))
+            solve!(sc,x,y,z,q,1;bounds=((0.,0.,0.),(1.,1.,1.)))
             SpaceCharge.deposit_vectorized!(reference, x, y, z, q)
             # No :static loop or threadid-indexed scratch: called from a task.
             fetch(Threads.@spawn deposit!(sc, x, y, z, q))
@@ -81,13 +81,13 @@ function run_threaded_deposition_tests()
             @test mesh.rho == before_empty
             @test_throws ArgumentError deposit!(sc, empty, empty, empty, empty; clear=true)
             @test mesh.rho == before_empty
-            deposit!(sc,fill(NaN,n),fill(NaN,n),fill(NaN,n),fill(NaN,n); active=falses(n),clear=false)
+            deposit!(sc,fill(NaN,n),fill(NaN,n),fill(NaN,n),fill(NaN,n); mask=falses(n),clear=false)
             @test mesh.rho == before_empty
             # A packed Boolean mask also skips invalid data in threaded batches.
             mask=trues(n);mask[2]=false;x[2]=NaN;q[2]=Inf
             fill!(reference.rho,0)
             SpaceCharge.deposit_vectorized!(reference,x,y,z,q,mask)
-            fetch(Threads.@spawn deposit!(sc,x,y,z,q;active=mask))
+            fetch(Threads.@spawn deposit!(sc,x,y,z,q;mask=mask))
             @test isapprox(mesh.rho,reference.rho;rtol=128eps(Float64),atol)
         end
     end

@@ -34,7 +34,7 @@ function main()
     particles_q = fill(charge_per_particle, num_particles)
 
     sc = FFTIGF(grid_size)
-    solve!(sc, particles_x, particles_y, particles_z, particles_q)
+    solve!(sc, particles_x, particles_y, particles_z, particles_q, 1)
     # Keep evaluation points inside the fitted domain.
     z_coords = collect(range(max(sc.min_bounds[3],-0.004),min(sc.max_bounds[3],0.004);length=101))
     xy = zeros(length(z_coords))

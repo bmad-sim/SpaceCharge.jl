@@ -24,7 +24,7 @@ function compare_cpu_gpu_deposit(grid_size, n_particles)
     # CPU benchmark
     println("Benchmarking CPU...")
     mesh_cpu = FFTIGF(grid_size)
-    solve!(mesh_cpu, particles_x, particles_y, particles_z, particles_q)
+    solve!(mesh_cpu, particles_x, particles_y, particles_z, particles_q, 1)
 
     cpu_time = @belapsed deposit!($mesh_cpu, $particles_x, $particles_y, $particles_z, $particles_q)
     cpu_charge = sum(mesh_cpu.rho)
@@ -48,7 +48,7 @@ function compare_cpu_gpu_deposit(grid_size, n_particles)
 
         # Create mesh on GPU
         mesh_gpu = FFTIGF(grid_size; backend=CUDABackend())
-        solve!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu)
+        solve!(mesh_gpu, particles_x_gpu, particles_y_gpu, particles_z_gpu, particles_q_gpu, 1)
 
         gpu_time = @belapsed begin
             deposit!($mesh_gpu, $particles_x_gpu, $particles_y_gpu, $particles_z_gpu, $particles_q_gpu)

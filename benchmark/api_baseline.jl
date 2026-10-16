@@ -58,7 +58,7 @@ function run_case(T, n, count)
     b=FFTIGF(n;T,backend,fft_flags=FFTW.ESTIMATE)
     oa=ntuple(_->similar(x),3); ob=ntuple(_->similar(x),3)
     oldsolve=()->(Old.deposit!(a,x,y,z,q);Old.solve!(a;fft_flags=FFTW.ESTIMATE))
-    newsolve=()->solve!(b,x,y,z,q;bounds)
+    newsolve=()->solve!(b,x,y,z,q,1;bounds)
     oldfield=()->Old.interpolate_field!(oa...,a,x,y,z)
     newfield=()->field!(ob...,b,x,y,z)
     setup_old=@elapsed (oldsolve();sync())
@@ -70,17 +70,17 @@ function run_case(T, n, count)
     @assert all(isapprox(normalization_ratio .* Array(oa[i]),Array(ob[i]);rtol=tol) for i in 1:3)
     println("case T=$T grid=$n N=$count gpu=$GPU_RUN first_prepare_s=",(setup_old,setup_new))
     report("fixed prepare",oldsolve,newsolve,sync)
-    report("staged solve",()->Old.solve!(a;fft_flags=FFTW.ESTIMATE),()->solve!(b),sync)
+    report("staged solve",()->Old.solve!(a;fft_flags=FFTW.ESTIMATE),()->solve!(b,1),sync)
     report("field",oldfield,newfield,sync)
     report("pipeline",()->(oldsolve();oldfield()),()->(newsolve();newfield()),sync)
     # Exactly changing gamma forces spectrum regeneration on every measured call.
     ga=Ref(T(1));gb=Ref(T(1))
     report("changing gamma",
         ()->(ga[]+=T(.001);a.gamma=ga[];oldsolve()),
-        ()->(gb[]+=T(.001);solve!(b,x,y,z,q;gamma=gb[],bounds)),sync)
+        ()->(gb[]+=T(.001);solve!(b,x,y,z,q,gb[];bounds)),sync)
     if T == Float64
         adaptive=FFTIGF(n;T,backend,fft_flags=FFTW.ESTIMATE)
-        solve!(adaptive,x,y,z,q)
+        solve!(adaptive,x,y,z,q,1)
         # Release has no combined refit operation. Recompute its original bounds
         # formula in-place so the comparison does not charge it mesh allocations.
         function oldfit!()
@@ -91,11 +91,11 @@ function run_case(T, n, count)
             a.delta=T.((a.max_bounds.-a.min_bounds)./(n.-1));a.gamma=one(T)
             oldsolve()
         end
-        report("adaptive prepare",oldfit!,()->solve!(adaptive,x,y,z,q),sync)
+        report("adaptive prepare",oldfit!,()->solve!(adaptive,x,y,z,q,1),sync)
         # Mutate the particle geometry without allocating a new particle batch.
         report("changing geometry",
             ()->(x .*= T(1.00001);oldfit!()),
-            ()->(x .*= T(1.00001);solve!(adaptive,x,y,z,q)),sync)
+            ()->(x .*= T(1.00001);solve!(adaptive,x,y,z,q,1)),sync)
     else
         println("Float32 adaptive baseline skipped: released padding can round away, causing out-of-bounds deposition.")
     end

@@ -9,11 +9,11 @@
     particles_z,
     min_bounds,
     inv_delta,
-    active,
+    mask,
 )
     i = @index(Global, Linear)
 
-    if !_active(active, i)
+    if !_is_included(mask, i)
         Ex[i] = Ey[i] = Ez[i] = zero(eltype(Ex))
     else
         @inbounds x, y, z = particles_x[i], particles_y[i], particles_z[i]

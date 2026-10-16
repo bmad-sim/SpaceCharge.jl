@@ -6,7 +6,7 @@ charge = [0.5e-9, 0.5e-9]
 sc = FFTIGF((32,32,32))
 bounds=((-0.01,-0.01,-0.01),(0.01,0.01,0.01))
 Ex, Ey, Ez = similar(x), similar(y), similar(z)
-solve!(sc, x, y, z, charge; gamma=1,bounds) # room for the separate probe below
+solve!(sc, x, y, z, charge, 1; bounds) # room for the separate probe below
 field!(Ex, Ey, Ez, sc, x, y, z)
 println("Particle E (V/m): ", (Ex,Ey,Ez))
 
