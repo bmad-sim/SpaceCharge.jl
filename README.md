@@ -40,8 +40,8 @@ field!(Ex, Ey, Ez, sc, x, y, z)
 The shared interface separates preparing a field from evaluating it:
 
 - `solve!(solver, x, y, z, charge; gamma=1, active=nothing)` prepares the field
-  from particle coordinates and charges, then returns `solver`. The Lorentz
-  factor `gamma` must be finite and at least 1.
+  from particle coordinates and charges. The Lorentz factor `gamma` must be finite
+  and at least 1.
 - `field!(Ex, Ey, Ez, solver, xt, yt, zt; active=nothing)` evaluates the prepared
   field at the supplied points. It overwrites your output vectors and returns
   `(Ex, Ey, Ez)`. Call `solve!` first; repeat `field!` to evaluate other points

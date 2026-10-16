@@ -1,7 +1,7 @@
 """
     solve!(solver, x, y, z, charge; gamma=1, active=nothing)
 
-Prepare a frozen field solution from particles and return `solver`. Positions are
+Prepare a frozen field solution from particles. Positions are
 simultaneous lab-frame Cartesian coordinates in metres, with z along the longitudinal
 direction. `charge` contains signed macroparticle charges in coulombs. `gamma` must be finite and >= 1.
 Optional `active` is a Boolean vector; inactive entries are skipped 

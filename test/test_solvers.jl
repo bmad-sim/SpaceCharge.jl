@@ -65,7 +65,7 @@ function test_cathode_geometry(backend)
             )
                 copyto!(z,T[points...])
                 solve!(free,x,y,z,q;gamma=2,bounds)
-                @test solve!(cathode,x,y,z,q;gamma=2,bounds) === cathode
+                @test solve!(cathode,x,y,z,q;gamma=2,bounds) === nothing
                 @test (cathode.min_bounds,cathode.max_bounds,cathode.delta) ==
                       (free.min_bounds,free.max_bounds,free.delta)
                 if bounds === nothing
@@ -131,9 +131,9 @@ function run_solver_tests()
             x=T[-0.01,0.009]; y=T[0.003,-0.008]; z=T[-0.012,0.013]; q=T[1e-12,-1e-12]
             evaluation_points=(T[-0.005,0,0.006],T[0.001,0.002,-0.003],T[0,0.003,0.01])
             o=ntuple(_->zeros(T,3),3); p=ntuple(_->zeros(T,3),3)
-            @test solve!(sc,x,y,z,q;gamma=2,bounds) === sc
+            @test solve!(sc,x,y,z,q;gamma=2,bounds) === nothing
             solve!(staged,x,y,z,q;bounds)
-            deposit!(staged,x,y,z,q); @test solve!(staged;gamma=2) === staged
+            deposit!(staged,x,y,z,q); @test solve!(staged;gamma=2) === nothing
             field!(o...,sc,evaluation_points...); field!(p...,staged,evaluation_points...)
             @test all(o[i]≈p[i] for i in 1:3)
             @test any(!iszero,o[1]) # signed net zero is not an empty particle batch
@@ -267,7 +267,7 @@ function run_solver_tests()
         solve!(free,x,y,z,q;gamma=2,bounds);solve!(cathode,x,y,z,q;gamma=2,bounds)
         deposited_charge=copy(cathode.rho)
         for _ in 1:3
-            @test solve!(cathode;gamma=2) === cathode
+            @test solve!(cathode;gamma=2) === nothing
             e=cathode.efield; scale=maximum(abs,e)
             @test maximum(abs,e[:,:,1,1:2]) < 1e-10scale
             @test e[:,:,1,3] ≈ 2free.efield[:,:,1,3] rtol=1e-10

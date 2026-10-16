@@ -114,7 +114,7 @@ function solve!(sc::FFTIGF, x, y, z, charge; gamma=1, active=nothing, bounds=not
     _set_grid_bounds!(sc, bounds)
     _deposit!(sc, x, y, z, charge, active)
     _solve_mesh!(sc; gamma=g)
-    return sc
+    return nothing
 end
 
 """
@@ -137,11 +137,11 @@ end
     solve!(solver::FFTIGF; gamma=1)
 
 Convolve the existing deposited charge without refitting geometry or redepositing.
-Returns `solver`. Omitting `gamma` resets it to 1, including after a relativistic solve.
+Returns `nothing`. Omitting `gamma` resets it to 1, including after a relativistic solve.
 """
 function solve!(sc::FFTIGF; gamma=1)
     _solve_mesh!(sc; gamma=_gamma(eltype(sc.rho), gamma))
-    return sc
+    return nothing
 end
 
 function field!(Ex, Ey, Ez, sc::FFTIGF, x, y, z; active=nothing)

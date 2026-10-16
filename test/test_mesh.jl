@@ -8,9 +8,10 @@ function run_mesh_tests()
             @test size(sc.rho) == (4,5,6)
             @test sc._workspace === nothing
             x = T[-1,1]; q = T[1e-12,-1e-12]; o = ntuple(_ -> similar(x), 3)
-            @test solve!(sc,x,x,x,q) === sc
+            @test solve!(sc,x,x,x,q) === nothing
             @test field!(o...,sc,x,x,x) === o
-            @test (@inferred solve!(sc,x,x,x,q)) === sc
+            @test (@inferred solve!(sc,x,x,x,q)) === nothing
+            @test (@inferred solve!(sc)) === nothing
             @test (@inferred field!(o...,sc,x,x,x)) === o
         end
         # Import/construction do not change FFTW's process-global thread count.
@@ -49,7 +50,7 @@ function run_mesh_tests()
             @test_throws DimensionMismatch field!(out...,sc,x,x,x;active=Bool[true])
             # Packed masks and ordinary mask views need no storage-unwrapping layer.
             for mask in (trues(2),view(trues(4),1:2:4))
-                @test solve!(sc,x,x,x,q;active=mask) === sc
+                @test solve!(sc,x,x,x,q;active=mask) === nothing
                 @test field!(out...,sc,x,x,x;active=mask) === out
             end
         end

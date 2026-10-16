@@ -15,11 +15,12 @@ function run_gpu_tests()
             points=collect(Iterators.product(coords...))
             x,y,z=ntuple(d->vec(getindex.(points,d)),3);q=vec(copy(ref.rho))
             dx,dy,dz,dq=CuArray.((x,y,z,q))
-            solve!(gpu,dx,dy,dz,dq;bounds);solve!(cpu,x,y,z,q;bounds)
+            @test solve!(gpu,dx,dy,dz,dq;bounds) === nothing
+            solve!(cpu,x,y,z,q;bounds)
             @test deposit!(gpu,dx,dy,dz,dq) === gpu
             deposit!(cpu,x,y,z,q)
             for gamma in (10.,10.,11.3,1.)
-                @test solve!(gpu;gamma) === gpu
+                @test solve!(gpu;gamma) === nothing
                 solve!(cpu;gamma)
                 CUDA.synchronize()
                 ref.rho .= cpu.rho;ref.gamma=T(gamma)
@@ -49,7 +50,8 @@ function run_gpu_tests()
             particles=CuArray.((host...,q));active=CuArray(mask)
             gpu=FFTIGF((8,9,10);T,backend=CUDABackend())
             cpu=FFTIGF((8,9,10);T,fft_flags=FFTW.ESTIMATE)
-            solve!(gpu,particles...;active,gamma=2); solve!(cpu,host...,q;active=mask,gamma=2)
+            @test solve!(gpu,particles...;active,gamma=2) === nothing
+            solve!(cpu,host...,q;active=mask,gamma=2)
             out=ntuple(_->similar(particles[1]),3);expected=ntuple(_->zeros(T,n),3)
             field!(out...,gpu,particles[1:3]...;active)
             field!(expected...,cpu,host...;active=mask)
