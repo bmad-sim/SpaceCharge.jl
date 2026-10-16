@@ -1,5 +1,3 @@
-using KernelAbstractions
-
 # Read-only gather into caller-owned outputs.
 @kernel function interpolate_kernel!(
     Ex,

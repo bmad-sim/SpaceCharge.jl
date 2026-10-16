@@ -59,9 +59,11 @@ function run_pruned_fft_tests()
             SpaceCharge._solve_mesh!(mesh;pruned_fft=true)
             expected = copy(mesh.efield)
             first = mesh._workspace
+            @test first.backward === nothing
             SpaceCharge._solve_mesh!(mesh;pruned_fft=false)
             @test mesh._workspace !== first
             @test mesh._workspace.pruned === nothing
+            @test mesh._workspace.backward !== nothing
             @test mesh.efield ≈ expected rtol=2e-13
             SpaceCharge._solve_mesh!(mesh;pruned_fft=true,fft_flags=FFTW.ESTIMATE)
             @test mesh._workspace.pruned !== nothing

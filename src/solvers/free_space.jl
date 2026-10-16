@@ -1,7 +1,3 @@
-using KernelAbstractions
-using AbstractFFTs
-using FFTW
-
 # Internal FFT stage; public solve! entry points have already validated gamma.
 function _solve_mesh!(mesh::FFTIGF; gamma=mesh.gamma,
                       at_cathode::Bool=mesh.options.at_cathode,
@@ -55,7 +51,6 @@ end
 
 # Function barrier specializes the plans and buffers stored in the mesh.
 function _solve_freespace!(mesh::FFTIGF{T}, w, offset; cache_green=true, image=false) where T
-    nx, ny, nz = mesh.grid_size
     _charge_transform!(mesh, w, w.pruned, image)
     greens = cache_green ? _cached_spectra!(mesh, w, offset) : nothing
     factor = T(FPEI) / T(length(w.pad))

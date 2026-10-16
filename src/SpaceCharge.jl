@@ -1,6 +1,8 @@
 module SpaceCharge
 
 using KernelAbstractions
+using Atomix
+using AbstractFFTs
 using FFTW
 using LinearAlgebra: mul!
 

@@ -1,5 +1,3 @@
-using AbstractFFTs
-
 # Each solver owns at most one free-space and one shifted-image spectrum set.
 # The exact key includes every physical parameter used by the kernel builder;
 # array backend, precision, and shape are fixed by the owning FFT workspace.
@@ -35,7 +33,7 @@ function _get_workspace(mesh::FFTIGF{T}; fft_flags=FFTW.MEASURE, pruned_fft::Boo
         image_cache = GreenCache{T,typeof(product)}(nothing, nothing)
         if get_backend(mesh.rho) isa CPU
             forward = plan_rfft(pad; flags=fft_flags)
-            backward = plan_brfft(product, dims[1]; flags=fft_flags)
+            backward = use_pruned ? nothing : plan_brfft(product, dims[1]; flags=fft_flags)
         else
             forward = plan_rfft(pad)
             backward = plan_brfft(product, dims[1])

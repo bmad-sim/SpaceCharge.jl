@@ -1,6 +1,3 @@
-using KernelAbstractions
-using Atomix
-
 # Closed upper faces belong to the last cell, with weight 1 on its upper node.
 @inline function _cell(x, lo, inv_delta, n)
     u = (x - lo) * inv_delta

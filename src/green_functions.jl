@@ -1,5 +1,3 @@
-using KernelAbstractions
-
 """
     potential_green_function(x, y, z)
 
@@ -44,7 +42,7 @@ function get_green_function!(
     gamma::T,
     icomp::Int;
     offset::NTuple{3, T} = (zero(T), zero(T), zero(T)),
-    temp::Union{Nothing, A} = nothing
+    temp::A
 ) where {T<:AbstractFloat, A<:AbstractArray}
     isize, jsize, ksize = size(cgrn)
 
@@ -55,14 +53,12 @@ function get_green_function!(
 
     # Apply 8-point differencing to compute integrated Green's function
     # Use a temporary array to avoid read-write race condition
-    diff_temp = temp === nothing ? similar(cgrn) : temp
-    backend = get_backend(cgrn)
     differencing_kernel! = apply_8point_differencing!(backend)
-    differencing_kernel!(diff_temp, cgrn, ndrange = (isize-1, jsize-1, ksize-1))
+    differencing_kernel!(temp, cgrn, ndrange = (isize-1, jsize-1, ksize-1))
 
     # Copy differenced values back to cgrn
     cgrn_view = @view cgrn[1:isize-1, 1:jsize-1, 1:ksize-1]
-    temp_view = @view diff_temp[1:isize-1, 1:jsize-1, 1:ksize-1]
+    temp_view = @view temp[1:isize-1, 1:jsize-1, 1:ksize-1]
     cgrn_view .= temp_view
 end
 
@@ -132,15 +128,6 @@ end
     corners[i, j, k] = value * factor
 end
 
-@kernel function _parity_difference!(octant, corners)
-    i, j, k = @index(Global, NTuple)
-    # Preserve the source stencil and its operation order.
-    octant[i, j, k] = corners[i+1, j+1, k+1] - corners[i, j+1, k+1] -
-                     corners[i+1, j, k+1] - corners[i+1, j+1, k] -
-                     corners[i, j, k] + corners[i, j, k+1] +
-                     corners[i, j+1, k] + corners[i+1, j, k]
-end
-
 @kernel function _parity_reflect!(out, octant, n, comp)
     i, j, k = @index(Global, NTuple)
     # In the source layout, zero displacement is at (nx, ny, nz).
@@ -186,7 +173,7 @@ function _symmetric_green!(out, mesh, comp::Integer, work)
     backend = get_backend(out)
     _parity_corners!(backend)(work.corners, mesh.delta, mesh.gamma, Int(comp);
                              ndrange = size(work.corners))
-    _parity_difference!(backend)(work.octant, work.corners; ndrange = n)
+    apply_8point_differencing!(backend)(work.octant, work.corners; ndrange = n)
     _parity_reflect!(backend)(out, work.octant, n, Int(comp); ndrange = size(out))
     return out
 end
