@@ -55,6 +55,12 @@ function _cached_spectra!(mesh, w, offset)
     return cache.spectra
 end
 
+@kernel function _multiply_spectrum!(product, green, @Const(charge))
+    i = @index(Global, Linear)
+    # The rebuilt Green spectrum may occupy product itself.
+    @inbounds product[i] = green[i] * charge[i]
+end
+
 # Convolve real or image charge with the kernels selected by w.components:
 # direct field components (1, 2, 3) or scalar potential (0,).
 # This function barrier specializes the plans and buffers stored in the mesh.
@@ -64,12 +70,13 @@ function _solve_freespace!(mesh::FFTIGF{T}, w, offset; cache_green=true, image=f
     # EPS_0 is in 1/(eV*m); EPS_0 * E_CHARGE is the SI permittivity in F/m.
     factor = T(inv(4pi * EPS_0 * E_CHARGE)) / T(length(w.pad))
     for (i, comp) in enumerate(w.components)
-        if greens === nothing
+        green = if greens === nothing
             _green_spectrum!(w.product, mesh, w, comp, offset)
-            w.product .*= w.rhohat
         else
-            @. w.product = greens[i] * w.rhohat
+            greens[i]
         end
+        _multiply_spectrum!(get_backend(w.product))(w.product, green, w.rhohat;
+                                                    ndrange=length(w.product))
         if comp == 0
             # Real charge initializes potential; image charge accumulates into it.
             potential = _convolution_inverse!(mesh, w, w.pruned)
