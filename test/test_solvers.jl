@@ -1,4 +1,5 @@
 using Test, SpaceCharge, Random
+using AtomicAndPhysicalConstants: EPS_0, E_CHARGE
 
 # Reading an inactive particle is an error even when its array index is valid.
 struct ActiveOnlyVector{T} <: AbstractVector{T}
@@ -255,7 +256,7 @@ function run_solver_tests()
             sc=FFTIGF((33,33,33);T,fft_flags=FFTW.ESTIMATE)
             a=T[0]; solve!(sc,a,a,a,T[1e-12];bounds=((-0.016,-0.016,-0.016),(0.016,0.016,0.016)))
             o=ntuple(_->similar(a),3); field!(o...,sc,T[0.012],a,a)
-            expected=SpaceCharge.FPEI*1e-12/0.012^2
+            expected=inv(4pi * EPS_0 * E_CHARGE)*1e-12/0.012^2
             @test o[1][1] ≈ expected rtol=0.005
             @test abs(o[2][1])+abs(o[3][1]) < 1e-4expected
         end

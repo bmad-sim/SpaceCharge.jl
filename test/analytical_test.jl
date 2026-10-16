@@ -3,10 +3,11 @@ using Test
 using Random
 using LinearAlgebra
 using SpecialFunctions
+using AtomicAndPhysicalConstants: EPS_0, E_CHARGE
 
 @testset "Analytical Comparison" begin
     # Constants
-    EPSILON_0 = 8.8541878128e-12 # Permittivity of free space
+    EPSILON_0 = EPS_0 * E_CHARGE # SI permittivity in F/m
 
     # Exact solution for isotropic Gaussian bunch
     function E_analytical(r;Q=1,σ=1)

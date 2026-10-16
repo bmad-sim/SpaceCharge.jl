@@ -1,6 +1,7 @@
 using SpaceCharge
 using Test
 using FFTW
+using AtomicAndPhysicalConstants: EPS_0, E_CHARGE
 
 # Independent baseline from commit 91ac2ee. Keep the primitive, eight-corner
 # stencil, complex FFTs, and extraction convention here instead of calling the
@@ -24,7 +25,7 @@ function reference_integrated_field(rho, delta, gamma; offset=(0.0, 0.0, 0.0))
     padded_rho[1:nx, 1:ny, 1:nz] .= rho
     rho_hat = fft(padded_rho)
     result = zeros(Float64, nx, ny, nz, 3)
-    coulomb_factor = 299792458.0^2 * 1.0e-7
+    coulomb_factor = inv(4pi * EPS_0 * E_CHARGE)
 
     for component in 1:3
         primitive = zeros(ComplexF64, dims)

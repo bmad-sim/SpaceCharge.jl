@@ -5,11 +5,12 @@ using Random
 using LinearAlgebra
 using SpecialFunctions
 using Statistics
+using AtomicAndPhysicalConstants: EPS_0, E_CHARGE
 
 """
 Constants for analytical calculations
 """
-EPSILON_0 = 8.8541878128e-12 # Permittivity of free space
+const EPSILON_0 = EPS_0 * E_CHARGE # SI permittivity in F/m
 
 """
 Exact analytical solution for isotropic Gaussian bunch

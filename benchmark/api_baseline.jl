@@ -2,6 +2,7 @@
 # directory and set SPACECHARGE_BASELINE to it. Run in an environment containing
 # this checkout, BenchmarkTools, and (optionally) CUDA. No checkout is modified.
 using SpaceCharge, FFTW, Random, Statistics, BenchmarkTools, KernelAbstractions
+using AtomicAndPhysicalConstants: EPS_0, E_CHARGE
 
 module Released
 include(joinpath(ENV["SPACECHARGE_BASELINE"], "src", "SpaceCharge.jl"))
@@ -64,7 +65,9 @@ function run_case(T, n, count)
     setup_new=@elapsed (newsolve();sync())
     oldfield();newfield();sync()
     tol=T===Float32 ? 3e-5 : 3e-12
-    @assert all(isapprox(Array(oa[i]),Array(ob[i]);rtol=tol) for i in 1:3)
+    # The release uses c^2*1e-7; compare discretizations at the same Coulomb constant.
+    normalization_ratio=inv(4pi * EPS_0 * E_CHARGE)/Old.FPEI
+    @assert all(isapprox(normalization_ratio .* Array(oa[i]),Array(ob[i]);rtol=tol) for i in 1:3)
     println("case T=$T grid=$n N=$count gpu=$GPU_RUN first_prepare_s=",(setup_old,setup_new))
     report("fixed prepare",oldsolve,newsolve,sync)
     report("staged solve",()->Old.solve!(a;fft_flags=FFTW.ESTIMATE),()->solve!(b),sync)

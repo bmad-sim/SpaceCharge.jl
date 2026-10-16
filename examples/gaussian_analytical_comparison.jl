@@ -4,8 +4,10 @@ using Random
 using SpecialFunctions: erf
 using LinearAlgebra: norm
 
+using AtomicAndPhysicalConstants: EPS_0, E_CHARGE
+
 # Constants
-const EPSILON_0 = 8.8541878128e-12 # Permittivity of free space
+const EPSILON_0 = EPS_0 * E_CHARGE # SI permittivity in F/m
 
 # Exact solution for isotropic Gaussian bunch
 function E(r;Q=1,σ=1)

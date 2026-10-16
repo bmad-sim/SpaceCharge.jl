@@ -80,6 +80,10 @@ This replaces the mesh-based public API; no compatibility aliases are provided.
 - **Benchmarks:** The `benchmark/` directory contains scripts to evaluate performance on different hardware and problem sizes.
 - **Tests:** The `test/` directory provides a comprehensive test suite including an analytical comparison against an isotropic Gaussian bunch.
 
+Physical constants come from AtomicAndPhysicalConstants 0.11. Its `EPS_0` is in
+`1/(eV*m)`, so `EPS_0 * E_CHARGE` supplies the SI permittivity used by the solver
+and analytical comparisons.
+
 ## Contributing
 
 Contributions are welcome! Please open issues or pull requests for bug reports, feature requests, or improvements.

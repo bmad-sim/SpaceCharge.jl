@@ -6,7 +6,7 @@ using AbstractFFTs
 using FFTW
 using LinearAlgebra: mul!
 
-include("utils.jl")
+using AtomicAndPhysicalConstants: EPS_0, E_CHARGE
 include("interface.jl")
 include("solvers/fftigf.jl")
 include("fft/workspace.jl")

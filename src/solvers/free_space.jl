@@ -53,7 +53,8 @@ end
 function _solve_freespace!(mesh::FFTIGF{T}, w, offset; cache_green=true, image=false) where T
     _charge_transform!(mesh, w, w.pruned, image)
     greens = cache_green ? _cached_spectra!(mesh, w, offset) : nothing
-    factor = T(FPEI) / T(length(w.pad))
+    # EPS_0 is in 1/(eV*m); EPS_0 * E_CHARGE is the SI permittivity in F/m.
+    factor = T(inv(4pi * EPS_0 * E_CHARGE)) / T(length(w.pad))
     for comp in 1:3
         if greens === nothing
             _green_spectrum!(w.product, mesh, w, comp, offset)
