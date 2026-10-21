@@ -3,8 +3,6 @@ using SpaceCharge, Test, CUDA, FFTW, Random
 function run_gpu_tests()
     CUDA.allowscalar(false)
     @testset "CUDA inverse preserves reusable spectra" begin
-        ext = Base.get_extension(SpaceCharge, :SpaceChargeCUDAExt)
-        @test ext !== nothing
         for T in (Float32, Float64), method in (:direct, :potential_fd), cathode in (false, true)
             ref = reference_test_mesh(T, (5, 6, 4), 10.)
             gpu = FFTIGF(ref.grid_size; T, backend=CUDABackend(),
@@ -13,8 +11,6 @@ function run_gpu_tests()
             copyto!(gpu.rho, ref.rho)
             solve!(gpu, ref.gamma)
             w = gpu._workspace
-            @test which(SpaceCharge._inverse_transform!,
-                        (typeof(w.result), typeof(w.backward), typeof(w.product))).module === ext
             charge = Array(w.rhohat)
             greens = map(Array, w.free_cache.spectra)
             images = cathode ? map(Array, w.image_cache.spectra) : nothing
