@@ -57,9 +57,9 @@ end
     I = @index(Global, Cartesian)
     # Centered inside, second-order one-sided at physical faces. The adjacent
     # doubled-grid values are not a valid physical halo and must not be read.
-    for d in 1:3
-        field[I, d] = scale[d] * _potential_difference(phi, I, d)
-    end
+    field[I, 1] = scale[1] * _potential_difference(phi, I, 1)
+    field[I, 2] = scale[2] * _potential_difference(phi, I, 2)
+    field[I, 3] = scale[3] * _potential_difference(phi, I, 3)
 end
 
 function _field_from_potential!(mesh, w)

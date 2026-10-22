@@ -2,6 +2,26 @@ using SpaceCharge, Test, CUDA, FFTW, Random
 
 function run_gpu_tests()
     CUDA.allowscalar(false)
+    @testset "CUDA inverse preserves reusable spectra" begin
+        for T in (Float32, Float64), method in (:direct, :potential_fd), cathode in (false, true)
+            ref = reference_test_mesh(T, (5, 6, 4), 10.)
+            gpu = FFTIGF(ref.grid_size; T, backend=CUDABackend(),
+                         field_method=method, at_cathode=cathode)
+            SpaceCharge._set_grid_bounds!(gpu, (ref.min_bounds, ref.max_bounds))
+            copyto!(gpu.rho, ref.rho)
+            solve!(gpu, ref.gamma)
+            w = gpu._workspace
+            charge = Array(w.rhohat)
+            greens = map(Array, w.free_cache.spectra)
+            images = cathode ? map(Array, w.image_cache.spectra) : nothing
+            expected = Array(gpu.efield)
+            solve!(gpu, ref.gamma)
+            @test Array(w.rhohat) == charge
+            @test map(Array, w.free_cache.spectra) == greens
+            @test !cathode || map(Array, w.image_cache.spectra) == images
+            @test Array(gpu.efield) == expected
+        end
+    end
     test_float32_adaptive_endpoints(CUDABackend())
     test_cathode_geometry(CUDABackend())
     @testset "CUDA array API and independent reference" begin
