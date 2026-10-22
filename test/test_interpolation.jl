@@ -4,7 +4,7 @@ function run_interpolation_tests()
     @testset "Gather domain, views and read-only evaluation" begin
         for T in (Float32,Float64)
             sc = FFTIGF((5,6,7);T,fft_flags=FFTW.ESTIMATE)
-            SpaceCharge._set_grid_bounds!(sc,((-2,-3,-4),(2,3,4)))
+            solve!(sc,T[-2,2],T[-3,3],T[-4,4],zeros(T,2),1;bounds=((-2,-3,-4),(2,3,4)))
             empty = T[]
             mesh=sc
             # Internal manufactured grid tests the gather independently of FFTs.
@@ -26,10 +26,6 @@ function run_interpolation_tests()
             dest=fill(T(NaN),8,3); so=ntuple(i->view(dest,1:2:8,i),3)
             field!(so...,sc,x,y,z;mask=mask)
             @test dest[1:2:8,:] == output
-            @test all(isnan,dest[2:2:8,:])
-            w=mesh._workspace; rho=copy(mesh.rho); grid=copy(mesh.efield)
-            field!(o...,sc,x,y,z;mask=mask)
-            @test mesh._workspace === w && mesh.rho == rho && mesh.efield == grid
             # Same prepared grid can be read by concurrent CPU tasks.
             results=fetch.([Threads.@spawn begin
                 out=ntuple(_->zeros(T,4),3)

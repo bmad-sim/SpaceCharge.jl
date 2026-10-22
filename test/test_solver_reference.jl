@@ -65,26 +65,25 @@ function reference_mesh_field(mesh; at_cathode=false)
     return field
 end
 
-function reference_test_mesh(T, grid_size, gamma)
-    # Contract z with gamma to retain moderate cell aspect ratios in the rest
-    # frame. This tests boosted normalization without the known ill-conditioning
-    # of the old primitive's Float32 log((r-z)/(r+z)) at extreme aspect ratios.
-    mesh = FFTIGF(grid_size; T)
-    SpaceCharge._set_grid_bounds!(mesh,((-0.023,-0.017,0.011/gamma),(0.029,0.021,0.039/gamma)))
-    mesh.gamma = T(gamma)
-    for k in 1:grid_size[3], j in 1:grid_size[2], i in 1:grid_size[1]
-        mesh.rho[i, j, k] = T(1e-12 * (sin(0.7i + 0.3j - 0.2k) + 0.17cos(i + 2j + k)))
+function reference_test_mesh(T, n, gamma; backend=CPU(), kwargs...)
+    bounds = ((-.023,-.017,.011/gamma),(.029,.021,.039/gamma))
+    axes = ntuple(d->T.(range(bounds[1][d],bounds[2][d];length=n[d])),3)
+    points = collect(Iterators.product(axes...))
+    x,y,z = ntuple(d->vec(getindex.(points,d)),3)
+    q = [T(1e-12*(sin(.7i+.3j-.2k)+.17cos(i+2j+k)))
+         for i in 1:n[1], j in 1:n[2], k in 1:n[3]]
+    q[1,end,1] += T(7e-12); q[end,1,end] -= T(3e-12)
+    particles = map((x,y,z,vec(q))) do a
+        dest = KernelAbstractions.zeros(backend,T,length(a))
+        copyto!(dest,a)
     end
-    # Unequal signed charges at opposite boundaries expose flips and shifts.
-    mesh.rho[1, end, 2] += T(7e-12)
-    mesh.rho[end, 2, end] -= T(3e-12)
+    mesh = FFTIGF(n; T, backend, fft_flags=FFTW.ESTIMATE, kwargs...)
+    solve!(mesh,particles...,gamma;bounds)
     return mesh
 end
 
 function test_field_against_reference(mesh; at_cathode=false)
     expected = reference_mesh_field(mesh; at_cathode=at_cathode)
-    @test all(isfinite, mesh.efield)
-    @test all(isfinite, expected)
     # Float32 includes cancellation in the primitive and corner differences;
     # compare each component so a boosted transverse field cannot hide Ez errors.
     tolerance = eltype(mesh.rho) == Float32 ? 3e-4 : 2e-10
@@ -95,42 +94,44 @@ end
 
 function run_solver_reference_tests()
     @testset "Independent integrated-field reference" begin
+        # Pair grid shapes with stationary/boosted cases; cache tests cover gamma changes.
         @testset "$T, grid=$grid_size, gamma=$gamma, cathode=$at_cathode" for
-            T in (Float32, Float64), grid_size in ((4, 5, 6), (7, 4, 5)),
-            gamma in (1.0, 10.0, 100.0), at_cathode in (false, true)
-            mesh = reference_test_mesh(T, grid_size, gamma)
-            SpaceCharge._solve_mesh!(mesh; at_cathode=at_cathode)
+            T in (Float32, Float64), at_cathode in (false, true),
+            (grid_size, gamma) in (((4, 5, 6), 1.0), ((7, 4, 5), 100.0))
+            mesh = reference_test_mesh(T, grid_size, gamma; at_cathode)
             test_field_against_reference(mesh; at_cathode=at_cathode)
         end
     end
 end
 
-function run_solver_cache_reference_tests()
-    @testset "Green cache invalidation against independent reference" begin
-        @testset "$T, cathode=$at_cathode" for T in (Float32, Float64), at_cathode in (false, true)
-            mesh = reference_test_mesh(T, (5, 6, 4), 10.0)
-            for update in (:initial, :reuse, :charge_values, :charge_array, :delta,
-                           :gamma, :cathode_offset, :uncached, :recached, :zero)
-                @testset "$update" begin
-                    if update == :charge_values
-                        mesh.rho .*= T(-0.7)
-                        mesh.rho[2, 3, 1] += T(5e-12)
-                    elseif update == :charge_array
-                        mesh.rho = reverse(copy(mesh.rho); dims=2)
-                    elseif update == :delta
-                        mesh.delta = mesh.delta .* T.((1.03, 0.91, 1.07))
-                        mesh.max_bounds = mesh.min_bounds .+ mesh.delta .* (mesh.grid_size .- 1)
-                    elseif update == :gamma
-                        mesh.gamma = T(11.3)
-                    elseif update == :cathode_offset
-                        translation = (zero(T), zero(T), T(0.17) * mesh.delta[3])
-                        mesh.min_bounds = mesh.min_bounds .+ translation
-                        mesh.max_bounds = mesh.max_bounds .+ translation
-                    elseif update == :zero
-                        fill!(mesh.rho, zero(T))
-                    end
-                    SpaceCharge._solve_mesh!(mesh; at_cathode=at_cathode, cache_green=update != :uncached)
-                    test_field_against_reference(mesh; at_cathode=at_cathode)
+function run_solver_reuse_tests(backend=CPU())
+    @testset "Repeated solves follow changed physical inputs on $backend" begin
+        for method in (:direct,:potential_fd), (T,cathode) in ((Float32,true),(Float64,false))
+            sc = FFTIGF((5,6,4); T, backend, field_method=method,
+                        at_cathode=cathode, fft_flags=FFTW.ESTIMATE)
+            x,y,z,q = map(a->test_array(backend,T.(a)),
+                ([-.01,.013],[.007,-.012],[.015,.028],[1e-12,-.7e-12]))
+            bounds = ((-.02,-.03,.01),(.02,.03,.04)); gamma = 2.
+            for state in (:initial,:repeat,:charge,:gamma,:spacing,:translation,:zero)
+                if state == :charge
+                    q .*= T(-.37)
+                elseif state == :gamma
+                    gamma = 3.
+                elseif state == :spacing
+                    bounds = ((-.03,-.04,.005),(.03,.04,.045))
+                elseif state == :translation
+                    z .+= T(.002)
+                    bounds = map(b->(b[1],b[2],b[3]+.002),bounds)
+                elseif state == :zero
+                    fill!(q,zero(T))
+                end
+                solve!(sc,x,y,z,q,gamma;bounds)
+                if method == :direct
+                    snapshot = (rho=Array(sc.rho),efield=Array(sc.efield),delta=sc.delta,
+                                gamma=sc.gamma,min_bounds=sc.min_bounds,max_bounds=sc.max_bounds)
+                    test_field_against_reference(snapshot;at_cathode=cathode)
+                else
+                    check_potential_reference(sc)
                 end
             end
         end

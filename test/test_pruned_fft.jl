@@ -1,93 +1,24 @@
-using Random, LinearAlgebra
+using Test, SpaceCharge, FFTW
 
 function run_pruned_fft_tests()
-    @testset "Pruned CPU FFTs" begin
-        rng = MersenneTwister(43107)
-        @testset "Transforms $T $n" for T in (Float32, Float64), n in ((2,3,4), (5,7,3), (6,4,8))
-            mesh = reference_test_mesh(T, n, 1.0)
-            w = SpaceCharge._get_workspace(mesh; fft_flags=FFTW.ESTIMATE, pruned_fft=true)
-            tol = T == Float32 ? 3e-6 : 2e-14
-            # Repeated calls with changed signed charges expose stale padding.
-            for image in (false, true, false)
-                mesh.rho .= randn(rng, T, n...)
-                SpaceCharge._charge_transform!(mesh, w, w.pruned, image)
-                got = copy(w.rhohat)
-                SpaceCharge._charge_transform!(mesh, w, nothing, image)
-                @test got ≈ w.rhohat rtol=tol
-            end
-            # A generic real input, with no Green-kernel parity assumptions.
-            dense = randn(rng, T, (2 .* n)...)
-            w.product .= rfft(dense)
-            SpaceCharge._field_inverse!(mesh, w, w.pruned, 1, inv(T(length(dense))), false)
-            nx,ny,nz = n
-            @test mesh.efield[:,:,:,1] ≈ dense[nx:2nx-1,ny:2ny-1,nz:2nz-1] rtol=tol
-        end
-        @testset "Full-path equivalence $T $n gamma=$gamma cathode=$cathode" for
-            T in (Float32,Float64), n in ((4,6,8),(5,7,3),(7,4,6)),
-            gamma in (1.,10.,100.), cathode in (false,true)
-            full = reference_test_mesh(T,n,gamma)
-            pruned = reference_test_mesh(T,n,gamma)
-            # Shifted kernels retain the legacy boundary planes. Cancellation
-            # during their convolution amplifies Float32 FFT rounding; on FFTW's
-            # native eight-thread plans the full/pruned difference is ~5e-6.
-            tol = T == Float32 ? (cathode ? 2e-5 : 3e-6) : 2e-13
-            for state in (:initial,:changed,:refresh,:shift,:zero)
-                if state == :changed
-                    full.rho .*= T(-.37)
-                    full.rho[end,1,1] += T(1e-11)
-                elseif state == :shift
-                    shift = T(.271) * full.delta[3]
-                    full.min_bounds = full.min_bounds .+ (zero(T),zero(T),shift)
-                    full.max_bounds = full.max_bounds .+ (zero(T),zero(T),shift)
-                elseif state == :zero
-                    fill!(full.rho,zero(T))
-                end
-                pruned.rho .= full.rho
-                pruned.min_bounds = full.min_bounds
-                pruned.max_bounds = full.max_bounds
-                a = SpaceCharge._solve_mesh!(full; at_cathode=cathode,cache_green=state!=:refresh,pruned_fft=false)
-                b = SpaceCharge._solve_mesh!(pruned; at_cathode=cathode,cache_green=state!=:refresh,pruned_fft=true)
-                @test b === nothing
+    @testset "Public transform and cache options give the same field" begin
+        for T in (Float32,Float64), method in (:direct,:potential_fd), cathode in (false,true)
+            n = (5,4,6) # Mixed even/odd dimensions exercise the transform crop.
+            bounds = ((-.02,-.03,.01),(.02,.03,.04))
+            x,y,z,q = T[-.01,.013],T[.007,-.012],T[.015,.028],T[1e-12,-.7e-12]
+            reference = FFTIGF(n; T, field_method=method, at_cathode=cathode,
+                              fft_flags=FFTW.ESTIMATE)
+            solve!(reference,x,y,z,q,2;bounds)
+            # Cache and FFT strategy are constructor options, not mutable plan state.
+            for options in ((pruned_fft=false,cache_green=true),
+                            (pruned_fft=true,cache_green=false))
+                sc = FFTIGF(n; T, field_method=method, at_cathode=cathode,
+                            fft_flags=FFTW.ESTIMATE, options...)
+                solve!(sc,x,y,z,q,2;bounds)
+                tol = T == Float32 ? (method == :direct && !cathode ? 3e-6 : 2e-5) : 2e-13
                 for c in 1:3
-                    @test pruned.efield[:,:,:,c] ≈ full.efield[:,:,:,c] rtol=tol
+                    @test sc.efield[:,:,:,c] ≈ reference.efield[:,:,:,c] rtol=tol
                 end
-                state in (:initial,:shift) && test_field_against_reference(pruned;at_cathode=cathode)
-            end
-        end
-        @testset "Workspace mode and planning changes" begin
-            mesh = reference_test_mesh(Float64,(4,5,6),10.)
-            SpaceCharge._solve_mesh!(mesh;pruned_fft=true)
-            expected = copy(mesh.efield)
-            first = mesh._workspace
-            @test first.backward === nothing
-            SpaceCharge._solve_mesh!(mesh;pruned_fft=false)
-            @test mesh._workspace !== first
-            @test mesh._workspace.pruned === nothing
-            @test mesh._workspace.backward !== nothing
-            @test mesh.efield ≈ expected rtol=2e-13
-            SpaceCharge._solve_mesh!(mesh;pruned_fft=true,fft_flags=FFTW.ESTIMATE)
-            @test mesh._workspace.pruned !== nothing
-            @test mesh.efield ≈ expected rtol=2e-13
-            mesh.rho = copy(mesh.rho)
-            before = mesh._workspace
-            SpaceCharge._solve_mesh!(mesh;pruned_fft=true,fft_flags=FFTW.ESTIMATE)
-            @test mesh._workspace !== before
-            @test mesh.efield ≈ expected rtol=2e-13
-            mesh.efield = similar(mesh.efield)
-            before = mesh._workspace
-            SpaceCharge._solve_mesh!(mesh; pruned_fft=true, fft_flags=FFTW.ESTIMATE)
-            @test mesh._workspace !== before
-            @test mesh.efield ≈ expected rtol=2e-13
-            previous_threads = FFTW.get_num_threads()
-            try
-                FFTW.set_num_threads(previous_threads == 1 ? 2 : 1)
-                before = mesh._workspace
-                SpaceCharge._solve_mesh!(mesh;pruned_fft=true,fft_flags=FFTW.ESTIMATE)
-                @test mesh._workspace !== before
-                @test mesh._workspace.fft_threads == FFTW.get_num_threads()
-                @test mesh.efield ≈ expected rtol=2e-13
-            finally
-                FFTW.set_num_threads(previous_threads)
             end
         end
     end

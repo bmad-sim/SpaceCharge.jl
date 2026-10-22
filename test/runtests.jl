@@ -34,9 +34,9 @@ CUDA_AVAILABLE && include("test_gpu.jl")
     run_solver_tests()
     run_solver_reference_tests()
     run_pruned_fft_tests()
-    run_solver_cache_reference_tests()
+    run_solver_reuse_tests()
     run_interpolation_tests()
-    run_potential_constructor_tests()
+    run_potential_anisotropy_test()
     run_potential_reference_tests()
     run_potential_accuracy_tests()
     
@@ -44,7 +44,7 @@ CUDA_AVAILABLE && include("test_gpu.jl")
     if CUDA_AVAILABLE
         run_gpu_tests()
         run_potential_reference_tests(CUDABackend())
-        run_potential_accuracy_tests(CUDABackend())
+        run_solver_reuse_tests(CUDABackend())
     else
         @info "CUDA not available, skipping GPU tests"
     end

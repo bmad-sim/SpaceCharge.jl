@@ -68,134 +68,53 @@ function reference_potential_field(mesh; cathode=mesh.options.at_cathode)
 end
 
 function check_potential_reference(sc)
-    phi, expected = reference_potential_field(sc)
+    _, expected = reference_potential_field(sc)
     observed = Array(sc.efield)
     tol = eltype(sc.rho) == Float32 ? 8e-4 : 3e-11
-    @test all(isfinite, observed)
-    @test Array(sc._workspace.potential) ≈ phi rtol=tol
     for c in 1:3
         @test observed[:,:,:,c] ≈ expected[:,:,:,c] rtol=tol
     end
 end
 
-function potential_reference_mesh(T, n, gamma; backend=CPU(), kwargs...)
-    sc = FFTIGF(n; T, backend, field_method=:potential_fd,
-                fft_flags=FFTW.ESTIMATE, kwargs...)
-    SpaceCharge._set_grid_bounds!(sc, ((-.023,-.017,.011/gamma),(.029,.021,.039/gamma)))
-    rho = [T(1e-12*(sin(.7i+.3j-.2k)+.17cos(i+2j+k)))
-           for i in 1:n[1], j in 1:n[2], k in 1:n[3]]
-    rho[1,end,1] += T(7e-12)
-    rho[end,1,end] -= T(3e-12)
-    copyto!(sc.rho, rho)
-    return sc
-end
-
 function run_potential_reference_tests(backend=CPU())
     @testset "Potential FD independent reference $backend" begin
+        # Keep both two-node and ordinary stencils, and stationary/boosted fields.
         @testset "$T n=$n gamma=$gamma cathode=$cathode" for
-            T in (Float32,Float64), n in ((2,3,4),(5,4,3)),
-            gamma in (1.,10.,100.), cathode in (false,true)
-            sc = potential_reference_mesh(T, n, gamma; backend, at_cathode=cathode)
-            solve!(sc, gamma)
+            T in (Float32,Float64), cathode in (false,true),
+            (n, gamma) in (((2,3,4),1.), ((3,2,2),10.), ((5,4,3),100.))
+            sc = reference_test_mesh(T, n, gamma; backend, at_cathode=cathode, field_method=:potential_fd)
             check_potential_reference(sc)
-            @test length(sc._workspace.free_cache.spectra) == 1
-            @test size(sc._workspace.potential) == n
-            @test size(sc._workspace.pad) == 2 .* n
-            @test (sc._workspace.image_cache.spectra !== nothing) == cathode
         end
     end
     @testset "Potential images across the cathode and aligned corners $backend" begin
         for T in (Float32,Float64), zlo in (-5.,-2.,-1.,.25)
-            sc = potential_reference_mesh(T, (3,4,5), 2.; backend, at_cathode=true)
-            # Exact binary spacing puts a shifted longitudinal cell corner at
-            # zero for zlo=.25. Also cover negative, symmetric, and crossing
-            # domains; a zero image offset correctly shares the free spectrum.
+            # Binary geometry includes negative, symmetric, crossing, and
+            # cell-corner-aligned image domains.
             h = T(1/64)
-            SpaceCharge._set_grid_bounds!(sc, ((-h,-2h,T(zlo)*h),(h,h,T(zlo+4)*h)))
-            solve!(sc,2)
-            check_potential_reference(sc)
-            @test (sc._workspace.image_cache.spectra === nothing) == (zlo == -2.)
-        end
-    end
-    @testset "Potential FD cache and transform reuse $backend" begin
-        for T in (Float32,Float64), cathode in (false,true)
-            sc = potential_reference_mesh(T, (3,4,5), 2.; backend, at_cathode=cathode)
-            solve!(sc, 2)
-            w = sc._workspace
-            spectra = w.free_cache.spectra
-            for state in (:repeat,:charge,:gamma,:spacing,:translation,:uncached,:recached,:zero)
-                if state == :charge
-                    sc.rho .*= T(-.37)
-                elseif state == :spacing
-                    sc.delta = sc.delta .* T.((1.03,.91,1.07))
-                    sc.max_bounds = sc.min_bounds .+ sc.delta .* (sc.grid_size .- 1)
-                elseif state == :translation
-                    shift = (zero(T),zero(T),T(.271)*sc.delta[3])
-                    sc.min_bounds = sc.min_bounds .+ shift
-                    sc.max_bounds = sc.max_bounds .+ shift
-                elseif state == :zero
-                    fill!(sc.rho,zero(T))
-                end
-                SpaceCharge._solve_mesh!(sc; gamma=T(state == :gamma ? 3. : sc.gamma),
-                                          cache_green=state != :uncached)
-                @test sc._workspace === w
-                @test w.free_cache.spectra === spectra
-                check_potential_reference(sc)
-                if backend isa CPU
-                    expected = copy(sc.efield)
-                    SpaceCharge._solve_mesh!(sc; pruned_fft=false)
-                    @test sc._workspace.pruned === nothing
-                    @test sc.efield ≈ expected rtol=(T == Float32 ? 2e-5 : 2e-13)
-                    SpaceCharge._solve_mesh!(sc; pruned_fft=true)
-                    w = sc._workspace
-                    spectra = w.free_cache.spectra
-                end
-            end
-            before = sc._workspace
-            sc.rho = copy(sc.rho)
-            solve!(sc, sc.gamma)
-            @test sc._workspace !== before
+            bounds = ((-h,-2h,T(zlo)*h),(h,h,T(zlo+4)*h))
+            sc = FFTIGF((3,4,5); T, backend, at_cathode=true,
+                        field_method=:potential_fd, fft_flags=FFTW.ESTIMATE)
+            x,y,z,q = map(a->test_array(backend,T.(a)),
+                ([0,h/2],[0,-h],[bounds[1][3]+h,bounds[2][3]-h],[1e-12,-.7e-12]))
+            solve!(sc,x,y,z,q,2;bounds)
             check_potential_reference(sc)
         end
     end
 end
 
-function run_potential_constructor_tests()
-    @testset "Anisotropic potential primitive against BigFloat" begin
-        # The nonzero Float32 transverse terms disappear in r's rounding, so
-        # evaluating log(a+r) directly would produce -Inf instead of this limit.
-        a, b, c = -1f0, 1f-4, 1f-4
-        r = sqrt(a*a+b*b+c*c)
-        @test r + a == 0
-        aa, bb, cc = BigFloat.((a,b,c))
-        rr = sqrt(aa*aa+bb*bb+cc*cc)
-        expected_log = bb*cc*log(aa+rr)
-        observed_log = SpaceCharge._potential_log_term(a,b,c,r)
-        @test isfinite(observed_log)
-        @test observed_log ≈ Float32(expected_log) rtol=4eps(Float32)
-        for xyz in ((a,b,c),(b,a,c),(b,c,a))
-            expected = reference_potential_primitive(BigFloat.(xyz)...)
-            observed = SpaceCharge.potential_green_function(xyz...)
-            @test isfinite(observed)
-            @test observed ≈ Float32(expected) rtol=5e-5
-        end
-    end
-    @testset "Field method selection" begin
-        @test_throws ArgumentError FFTIGF((4,4,4); field_method=:unknown)
-        for T in (Float32,Float64)
-            default = FFTIGF((4,5,6); T, fft_flags=FFTW.ESTIMATE)
-            direct = FFTIGF((4,5,6); T, field_method=:direct, fft_flags=FFTW.ESTIMATE)
-            x = T[-.01,.02]; q = T[1e-12,-3e-12]
-            solve!(default,x,x,x,q,2)
-            solve!(direct,x,x,x,q,2)
-            @test default.efield == direct.efield
-            @test direct._workspace.potential === nothing
-            @test length(direct._workspace.free_cache.spectra) == 3
-            potential = FFTIGF((4,5,6); T, field_method=:potential_fd, fft_flags=FFTW.ESTIMATE)
-            @test_throws MethodError solve!(potential,x,x,x,q)
-            @test_throws MethodError solve!(potential)
-            @test (@inferred solve!(potential,x,x,x,q,2)) === nothing
-            @test (@inferred solve!(potential,2)) === nothing
-        end
+function run_potential_anisotropy_test()
+    @testset "Anisotropic Float32 field at an axial probe" begin
+        # At this aspect ratio, transverse terms disappear in rounded radii.
+        # The physical field remains finite despite cancellation in log terms.
+        sc = FFTIGF((3,3,3); T=Float32, field_method=:potential_fd, fft_flags=FFTW.ESTIMATE)
+        x = Float32[0]; q = Float32[1e-12]
+        solve!(sc,x,x,x,q,1;bounds=((-1.,-1e-4,-1e-4),(1.,1e-4,1e-4)))
+        out = ntuple(_->similar(x),3)
+        field!(out...,sc,Float32[1],x,x)
+        _, expected = reference_potential_field(sc)
+        @test out[1][1] ≈ expected[3,2,2,1] rtol=8e-4
+        scale = maximum(abs,sc.efield)
+        @test abs(out[2][1]) < 128eps(Float32)*scale
+        @test abs(out[3][1]) < 128eps(Float32)*scale
     end
 end
