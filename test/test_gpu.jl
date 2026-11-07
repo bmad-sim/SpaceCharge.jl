@@ -4,6 +4,51 @@ function run_gpu_tests()
     CUDA.allowscalar(false)
     test_float32_adaptive_endpoints(CUDABackend())
     test_cathode_geometry(CUDABackend())
+    @testset "CUDA CIC faces, masks and accumulation" begin
+        for T in (Float32,Float64)
+            gpu = FFTIGF((3,5,9);T,backend=CUDABackend())
+            x = T[0,1,.25,0,1,NaN]
+            y = T[0,1,.375,1,0,NaN]
+            z = T[0,1,.4375,1,0,NaN]
+            q = T[1,-2,4,8,-4,NaN]
+            mask = CuArray(Bool[1,1,1,1,1,0])
+            particles = CuArray.((x,y,z,q))
+            expected = zeros(T,3,5,9)
+            expected[1,1,1] = 1; expected[3,5,9] = -2
+            expected[1:2,2:3,4:5] .= T(.5)
+            expected[1,5,9] = 8; expected[3,1,1] = -4
+            solve!(gpu,particles...,1;mask,bounds=((0,0,0),(1,1,1)))
+            @test Array(gpu.rho) == expected
+            @test deposit!(gpu,particles...;mask,clear=false) === gpu
+            @test Array(gpu.rho) == 2expected
+            deposit!(gpu,particles...;mask)
+            @test Array(gpu.rho) == expected
+            # Inactive NaNs and empty additions leave existing charge unchanged.
+            fill!(mask,false)
+            deposit!(gpu,particles...;mask,clear=false)
+            @test Array(gpu.rho) == expected
+            empty = CUDA.zeros(T,0)
+            deposit!(gpu,empty,empty,empty,empty;clear=false)
+            @test Array(gpu.rho) == expected
+            @test_throws ArgumentError deposit!(gpu,particles...;mask)
+        end
+    end
+    @testset "CUDA contended signed deposition" begin
+        for T in (Float32,Float64)
+            gpu = FFTIGF((5,5,5);T,backend=CUDABackend())
+            n = 83_017
+            x,y,z = (CUDA.fill(T(v),n) for v in (.125,.375,.625))
+            q = CuArray([isodd(i) ? T(2.0^-30) : -T(2.0^-31) for i in 1:n])
+            solve!(gpu,x,y,z,q,1;bounds=((0,0,0),(1,1,1)))
+            expected = zeros(T,5,5,5)
+            expected[1:2,2:3,3:4] .= sum(Array(q))/8
+            @test Array(gpu.rho) == expected
+            deposit!(gpu,x,y,z,q;clear=false)
+            @test Array(gpu.rho) == 2expected
+            deposit!(gpu,x,y,z,-q)
+            @test Array(gpu.rho) == -expected
+        end
+    end
     @testset "CUDA direct fields against independent reference" begin
         for T in (Float32,Float64), cathode in (false,true)
             gpu = reference_test_mesh(T,(5,6,4),10.;backend=CUDABackend(),at_cathode=cathode)
