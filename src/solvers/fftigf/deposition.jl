@@ -5,6 +5,12 @@
     return i < n - 1 ? (i, u - i) : (n - 2, one(x))
 end
 
+# Only the sum is needed. Backends can specialize this update without changing CIC.
+@inline function _deposit_add!(rho, charge, i, j, k)
+    @inbounds Atomix.@atomic rho[i, j, k] += charge
+    return nothing
+end
+
 """
     deposit_particle!(rho, particle_x, particle_y, particle_z, particle_q, min_bounds, inv_delta; use_atomic=false)
 
@@ -38,14 +44,14 @@ Deposit a particle's charge onto eight neighboring nodes using CIC weights.
     @inbounds begin
         if use_atomic
             # Use atomic operations for thread safety (GPU)
-            Atomix.@atomic rho[ix + 1, iy + 1, iz + 1] += charge * w_x0 * w_y0 * w_z0
-            Atomix.@atomic rho[ix + 2, iy + 1, iz + 1] += charge * w_x1 * w_y0 * w_z0
-            Atomix.@atomic rho[ix + 1, iy + 2, iz + 1] += charge * w_x0 * w_y1 * w_z0
-            Atomix.@atomic rho[ix + 2, iy + 2, iz + 1] += charge * w_x1 * w_y1 * w_z0
-            Atomix.@atomic rho[ix + 1, iy + 1, iz + 2] += charge * w_x0 * w_y0 * w_z1
-            Atomix.@atomic rho[ix + 2, iy + 1, iz + 2] += charge * w_x1 * w_y0 * w_z1
-            Atomix.@atomic rho[ix + 1, iy + 2, iz + 2] += charge * w_x0 * w_y1 * w_z1
-            Atomix.@atomic rho[ix + 2, iy + 2, iz + 2] += charge * w_x1 * w_y1 * w_z1
+            _deposit_add!(rho, charge * w_x0 * w_y0 * w_z0, ix + 1, iy + 1, iz + 1)
+            _deposit_add!(rho, charge * w_x1 * w_y0 * w_z0, ix + 2, iy + 1, iz + 1)
+            _deposit_add!(rho, charge * w_x0 * w_y1 * w_z0, ix + 1, iy + 2, iz + 1)
+            _deposit_add!(rho, charge * w_x1 * w_y1 * w_z0, ix + 2, iy + 2, iz + 1)
+            _deposit_add!(rho, charge * w_x0 * w_y0 * w_z1, ix + 1, iy + 1, iz + 2)
+            _deposit_add!(rho, charge * w_x1 * w_y0 * w_z1, ix + 2, iy + 1, iz + 2)
+            _deposit_add!(rho, charge * w_x0 * w_y1 * w_z1, ix + 1, iy + 2, iz + 2)
+            _deposit_add!(rho, charge * w_x1 * w_y1 * w_z1, ix + 2, iy + 2, iz + 2)
         else
             # Direct assignment for single-threaded CPU
             rho[ix + 1, iy + 1, iz + 1] += charge * w_x0 * w_y0 * w_z0
