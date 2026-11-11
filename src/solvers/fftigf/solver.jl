@@ -66,7 +66,7 @@ function _particle_bounds(x, y, z, mask=nothing)
     return mapreduce(identity, combine, points; init)
 end
 
-function _set_grid_bounds!(sc::FFTIGF{T}, bounds) where T
+function _checked_grid_geometry(sc::FFTIGF{T}, bounds) where T
     lo, hi = bounds
     length(lo) == length(hi) == 3 || throw(ArgumentError("bounds need three coordinates"))
     lo, hi = Tuple(T.(lo)), Tuple(T.(hi))
@@ -75,16 +75,24 @@ function _set_grid_bounds!(sc::FFTIGF{T}, bounds) where T
     delta = (hi .- lo) ./ (sc.grid_size .- 1)
     all(d -> isfinite(d) && d > 0 && isfinite(inv(d)), delta) ||
         throw(ArgumentError("grid spacing must be finite and positive"))
-    sc.min_bounds, sc.max_bounds, sc.delta = lo, hi, delta
+    return lo, hi, delta
+end
+
+function _set_grid_bounds!(sc::FFTIGF, bounds)
+    sc.min_bounds, sc.max_bounds, sc.delta = _checked_grid_geometry(sc, bounds)
     return nothing
 end
 
 # Compute padded grid bounds without changing the solver.
 function _grid_bounds_from_particles(sc::FFTIGF{T}, x, y, z, mask) where T
-    n = sc.grid_size
     particle_bounds = _particle_bounds(x, y, z, mask)
     lo, hi = particle_bounds.lo, particle_bounds.hi
     all(isfinite, lo) && all(isfinite, hi) || throw(ArgumentError("active particle coordinates must be finite"))
+    return _padded_grid_bounds(sc, lo, hi)
+end
+
+function _padded_grid_bounds(sc::FFTIGF{T}, lo, hi) where T
+    n = sc.grid_size
     pairs = ntuple(3) do k
         lower = lo[k]
         upper = hi[k]
@@ -153,6 +161,10 @@ end
 
 function field!(Ex, Ey, Ez, sc::FFTIGF, x, y, z; mask=nothing)
     _check_arrays(sc.rho, (x, y, z, Ex, Ey, Ez), mask)
+    return _field!(Ex, Ey, Ez, sc, x, y, z, mask)
+end
+
+function _field!(Ex, Ey, Ez, sc, x, y, z, mask)
     isempty(x) && return (Ex, Ey, Ez)
     interpolate_kernel!(get_backend(sc.rho))(Ex, Ey, Ez, sc.efield, x, y, z,
         sc.min_bounds, inv.(sc.delta), mask; ndrange=length(x))

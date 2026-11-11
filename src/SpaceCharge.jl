@@ -16,7 +16,9 @@ include("solvers/fftigf/green_functions.jl")
 include("solvers/fftigf/potential.jl")
 include("solvers/fftigf/transforms.jl")
 include("solvers/fftigf/solve.jl")
+include("solvers/fftigf/prepared.jl")
 
 export FFTIGF, solve!, field!, deposit!
+export prepare!, solve_prepared!, field_prepared!
 
 end # module SpaceCharge

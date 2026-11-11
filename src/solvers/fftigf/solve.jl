@@ -4,8 +4,16 @@ function _solve_mesh!(mesh::FFTIGF; gamma=mesh.gamma,
                       fft_flags=mesh.options.fft_flags,
                       cache_green::Bool=mesh.options.cache_green,
                       pruned_fft::Bool=mesh.options.pruned_fft)
-    mesh.gamma = gamma
     w = _get_workspace(mesh; fft_flags, pruned_fft)
+    return _solve_mesh!(mesh, w; gamma, at_cathode, cache_green)
+end
+
+# Prepared execution passes its concrete workspace directly. Geometry and gamma
+# still select the Green spectra on every solve.
+function _solve_mesh!(mesh::FFTIGF, w; gamma,
+                      at_cathode::Bool=mesh.options.at_cathode,
+                      cache_green::Bool=mesh.options.cache_green)
+    mesh.gamma = gamma
     # Real charge initializes the direct field or scalar potential, as selected.
     T = eltype(mesh.rho)
     _solve_freespace!(mesh, w, (zero(T), zero(T), zero(T)); cache_green)

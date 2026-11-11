@@ -55,6 +55,39 @@ inside the prepared domain. An optional Boolean `mask` includes entries marked
 
 See the [examples](examples/) for CPU, GPU, cathode, and analytical comparisons.
 
+## Prepared execution in a tracking loop
+
+Keep the ordinary solve! and field! interface for standalone calls. A tracking
+application that validates its inputs at setup can prepare resources once and
+use the explicit unchecked execution interface:
+
+    sc = FFTIGF((32, 32, 32))
+    prepared = prepare!(sc, x, y, z, charge; mask)
+    # Inside the loop, after updating valid particle data:
+    solve_prepared!(prepared, x, y, z, charge, gamma; mask)
+    field_prepared!(Ex, Ey, Ez, prepared, x, y, z; mask)
+
+Preparation checks array axes, precision, backend, and the initial fitted
+geometry, then allocates FFT plans, Green-spectrum storage, and CPU deposition
+scratch. It allows empty/all-inactive batches at setup and does not perform a
+physical solve or change the current field. The caller validates active charges
+and the field-output layout before entering its loop.
+
+The prepared calls do not repeat input validation or select/rebuild workspaces.
+The caller must keep the prepared particle count/layout and solver resources
+unchanged, supply at least one active particle, finite active data and a finite
+representable gamma >= 1, fitted bounds with finite positive representable
+spacings, and evaluation points inside the current bounds.
+Call prepare! again after changing array layout/count, grid, backend, precision,
+solver arrays/options, or FFT thread settings. Handles share mutable solver
+state and are not safe for concurrent use.
+
+Particle coordinates, charges, inclusion mask, and gamma may change each step.
+Bounds are fitted each solve unless explicitly supplied, and Green spectra are
+refreshed when the geometry or gamma changes, including cathode image offsets.
+Numerical deposition, FFT convolution, and interpolation kernels are shared
+with the ordinary interface.
+
 ## Citation
 
 Mayes, Christopher, Robert Ryne, and David Sagan. "3D Space Charge in Bmad."

@@ -174,10 +174,7 @@ operation when timing GPU execution, as with other KernelAbstractions kernels.
 """
 function _symmetric_green!(out, mesh, comp::Integer, work)
     n = mesh.grid_size
-    1 <= comp <= 3 || throw(ArgumentError("comp must be 1, 2, or 3"))
-    size(out) == (2n[1], 2n[2], 2n[3]) || throw(DimensionMismatch("out must be doubled mesh dimensions"))
-    size(work.corners) == (n[1]+1, n[2]+1, n[3]+1) || throw(DimensionMismatch("corner workspace does not match mesh"))
-    size(work.octant) == n || throw(DimensionMismatch("octant workspace does not match mesh"))
+    # Component selectors and scratch dimensions are fixed by workspace setup.
     backend = get_backend(out)
     _parity_corners!(backend)(work.corners, mesh.delta, mesh.gamma, Int(comp);
                              ndrange = size(work.corners))

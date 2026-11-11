@@ -15,6 +15,7 @@ end
 
 # Include individual test modules
 include("test_mesh.jl")
+include("test_prepared.jl")
 include("test_deposition.jl")
 include("test_threaded_deposition.jl")
 include("test_solvers.jl")
@@ -29,6 +30,7 @@ CUDA_AVAILABLE && include("test_gpu.jl")
 @testset "SpaceCharge.jl" begin
     # Run all test modules
     run_mesh_tests()
+    run_prepared_tests()
     run_deposition_tests()
     run_threaded_deposition_tests()
     run_solver_tests()
@@ -43,6 +45,7 @@ CUDA_AVAILABLE && include("test_gpu.jl")
     # GPU tests only if CUDA is available
     if CUDA_AVAILABLE
         run_gpu_tests()
+        run_prepared_tests(CUDABackend())
         run_potential_reference_tests(CUDABackend())
         run_solver_reuse_tests(CUDABackend())
     else

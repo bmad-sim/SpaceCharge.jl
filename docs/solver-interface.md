@@ -99,3 +99,20 @@ They do not become requirements for other implementations.
 - Measure preparation and evaluation separately after compilation and setup.
   Check storage reuse and unintended copying or allocation; synchronize GPU
   timings at measurement boundaries.
+
+## Optional prepared execution
+
+FFTIGF also provides prepare!, solve_prepared!, and field_prepared! for an
+integrator with its own validated setup boundary. These are optional solver
+operations, not requirements on every SpaceCharge implementation.
+
+prepare! validates the source-array layout and initial fitted geometry, and
+selects and allocates resources without computing or changing a field. Its returned handle
+shares the solver's state. The prepared solve and gather calls deliberately
+skip validation; the caller must enforce their documented input/lifetime
+contracts. They use the ordinary numerical kernels, so bounds, gamma, charges,
+masks, and cathode offsets still affect every solve.
+
+Do not call ordinary solve! or mutate the solver's resource configuration while
+a prepared execution is in progress. Prepare again after changes to layout,
+particle count, solver resources/options, backend, precision, or FFT threads.
