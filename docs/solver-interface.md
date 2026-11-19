@@ -99,3 +99,11 @@ They do not become requirements for other implementations.
 - Measure preparation and evaluation separately after compilation and setup.
   Check storage reuse and unintended copying or allocation; synchronize GPU
   timings at measurement boundaries.
+
+## Unchecked particle solves
+
+Use `unsafe_solve!(solver, x, y, z, charge, gamma; mask)` and
+`unsafe_field!(Ex, Ey, Ez, solver, x, y, z; mask)` when the caller guarantees
+valid inputs on every call. See their docstrings for the contract. The ordinary
+solver initializes and reuses FFT plans and scratch internally. Prefer the
+checked `solve!` and `field!` for standalone use.
