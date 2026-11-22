@@ -1,6 +1,6 @@
 """
     FFTIGF(grid_size; T=Float64, backend=CPU(),
-           fft_flags=FFTW.MEASURE, cache_green=true, pruned_fft=true,
+           fft_flags=FFTW.MEASURE, cache_green=true,
            at_cathode=false, field_method=:direct)
 
 Reusable integrated Green-function FFT solver. Each particle-based `solve!`
@@ -33,8 +33,7 @@ end
 
 function FFTIGF(n::NTuple{3,Int}; T=Float64, backend=CPU(),
                 fft_flags=FFTW.MEASURE, cache_green::Bool=true,
-                pruned_fft::Bool=true, at_cathode::Bool=false,
-                field_method::Symbol=:direct)
+                at_cathode::Bool=false, field_method::Symbol=:direct)
     T in (Float32, Float64) || throw(ArgumentError("FFTIGF supports Float32 and Float64"))
     all(k -> k >= 2, n) || throw(ArgumentError("grid dimensions must be at least 2"))
     backend isa Union{CPU,GPU} || throw(ArgumentError("unsupported FFT backend"))
@@ -45,7 +44,7 @@ function FFTIGF(n::NTuple{3,Int}; T=Float64, backend=CPU(),
     delta = (hi .- lo) ./ (n .- 1)
     rho = KernelAbstractions.zeros(backend, T, n...)
     efield = KernelAbstractions.zeros(backend, T, n..., 3)
-    options = (;fft_flags, cache_green, pruned_fft, at_cathode, field_method)
+    options = (;fft_flags, cache_green, at_cathode, field_method)
     return FFTIGF(n, lo, hi, delta, one(T), rho, efield, nothing, nothing,
                   options)
 end
