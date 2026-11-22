@@ -18,5 +18,6 @@ include("solvers/fftigf/transforms.jl")
 include("solvers/fftigf/solve.jl")
 
 export FFTIGF, solve!, field!, deposit!
+export unsafe_solve!, unsafe_field!
 
 end # module SpaceCharge
