@@ -33,8 +33,7 @@ end
 
 function FFTIGF(n::NTuple{3,Int}; T=Float64, backend=CPU(),
                 fft_flags=FFTW.MEASURE, cache_green::Bool=true,
-                at_cathode::Bool=false,
-                field_method::Symbol=:direct)
+                at_cathode::Bool=false, field_method::Symbol=:direct)
     T in (Float32, Float64) || throw(ArgumentError("FFTIGF supports Float32 and Float64"))
     all(k -> k >= 2, n) || throw(ArgumentError("grid dimensions must be at least 2"))
     backend isa Union{CPU,GPU} || throw(ArgumentError("unsupported FFT backend"))
