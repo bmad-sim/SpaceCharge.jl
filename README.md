@@ -53,7 +53,9 @@ the solver's precision and device. Evaluation points must be finite and
 inside the prepared domain. An optional Boolean `mask` includes entries marked
 `true` and skips those marked `false`. Skipped evaluation points receive zero field.
 
-See the [examples](examples/) for CPU, GPU, cathode, and analytical comparisons.
+See the [FFTIGF guide](docs/fftigf.md) for solver options, grid bounds, staged
+reuse, and the numerical method, and the [examples](examples/) for CPU, GPU,
+cathode, and analytical comparisons.
 
 ## Citation
 
