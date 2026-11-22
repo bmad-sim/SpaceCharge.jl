@@ -2,7 +2,7 @@
 
 Space charge solvers calculate the electric field from charged particles
 and evaluate the field at caller-selected points. Each solver has a concrete
-type that owns its scratch space and implements `solve!` and `field!` (see
+type that implements `solve!` and `field!` (see
 [`src/interface.jl`](../src/interface.jl)). Constructors, physical models, and
 supported devices are specific to each solver.
 
@@ -100,10 +100,9 @@ They do not become requirements for other implementations.
   Check storage reuse and unintended copying or allocation; synchronize GPU
   timings at measurement boundaries.
 
-## Unchecked particle solves
+## Optional unchecked methods
 
-Use `unsafe_solve!(solver, x, y, z, charge, gamma; mask)` and
-`unsafe_field!(Ex, Ey, Ez, solver, x, y, z; mask)` when the caller guarantees
-valid inputs on every call. See their docstrings for the contract. The ordinary
-solver initializes and reuses FFT plans and scratch internally. Prefer the
-checked `solve!` and `field!` for standalone use.
+Only `solve!` and `field!` are required by the shared interface. Solvers may
+optionally provide `unsafe_solve!` and `unsafe_field!` variants that skip input
+checks. Use the checked methods by default. Callers using unchecked methods
+must meet the specific solver's documented input requirements on every call.
