@@ -9,4 +9,4 @@ SpaceCharge = "886cafed-6ce3-46b8-9147-fe45a2210a4b"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [compat]
-AtomicAndPhysicalConstants = "0.11.5"
+AtomicAndPhysicalConstants = "0.12"
