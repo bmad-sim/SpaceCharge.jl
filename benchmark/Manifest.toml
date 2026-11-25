@@ -39,9 +39,9 @@ version = "1.11.0"
 
 [[deps.AtomicAndPhysicalConstants]]
 deps = ["EnumX", "Preferences"]
-git-tree-sha1 = "5868bc44277622c0033a125b607aec0440a84483"
+git-tree-sha1 = "e9eafc12aa6543deb60b6491032af2901975ce1d"
 uuid = "5c0d271c-5419-4163-b387-496237733d8b"
-version = "0.11.5"
+version = "0.12.0"
 
 [[deps.Atomix]]
 deps = ["UnsafeAtomics"]
@@ -599,6 +599,10 @@ deps = ["AbstractFFTs", "AtomicAndPhysicalConstants", "Atomix", "FFTW", "KernelA
 path = ".."
 uuid = "886cafed-6ce3-46b8-9147-fe45a2210a4b"
 version = "1.3.0"
+weakdeps = ["CUDA"]
+
+    [deps.SpaceCharge.extensions]
+    SpaceChargeCUDAExt = "CUDA"
 
 [[deps.SparseArrays]]
 deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]
